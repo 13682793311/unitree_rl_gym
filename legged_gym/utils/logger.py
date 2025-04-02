@@ -12,6 +12,8 @@ class Logger:
 
     def log_state(self, key, value):
         self.state_log[key].append(value)
+        
+        wandb.log({key: value}, step=self.step)
 
     def log_states(self, dict):
         for key, value in dict.items():
@@ -22,18 +24,13 @@ class Logger:
             if 'rew' in key:
                 self.rew_log[key].append(value.item() * num_episodes)
         self.num_episodes += num_episodes
-
+    
     def reset(self):
         self.state_log.clear()
-        self.rew_log.clear()   
+        self.rew_log.clear() 
 
-    def print_rewards(self):
-        print("Average rewards per second:")
-        for key, values in self.rew_log.items():
-            mean = np.sum(np.array(values)) / self.num_episodes
-            print(f" - {key}: {mean}")
-        print(f"Total number of episodes: {self.num_episodes}")
     
+
     def __del__(self):
         if self.plot_process is not None:
             self.plot_process.kill()

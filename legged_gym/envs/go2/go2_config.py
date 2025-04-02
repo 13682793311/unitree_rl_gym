@@ -20,6 +20,11 @@ class GO2RoughCfg( LeggedRobotCfg ):
             'RR_calf_joint': -1.5,    # [rad]
         }
 
+    class env(LeggedRobotCfg.env):
+        num_observations = 45
+        num_privileged_obs = 48
+        num_actions = 12
+
     class control( LeggedRobotCfg.control ):
         # PD Drive parameters:
         control_type = 'P'
@@ -49,6 +54,7 @@ class GO2RoughCfgPPO( LeggedRobotCfgPPO ):
     class algorithm( LeggedRobotCfgPPO.algorithm ):
         entropy_coef = 0.01
     class runner( LeggedRobotCfgPPO.runner ):
+        max_iterations = 1500
         run_name = ''
         experiment_name = 'rough_go2'
 

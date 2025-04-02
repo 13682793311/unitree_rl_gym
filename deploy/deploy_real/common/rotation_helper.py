@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-
+# 计算重力在机器人坐标系下的三个方向的分量
 def get_gravity_orientation(quaternion):
     qw = quaternion[0]
     qx = quaternion[1]
@@ -16,10 +16,15 @@ def get_gravity_orientation(quaternion):
 
     return gravity_orientation
 
-
+# 将躯干部分imu信息转移到骨盆处
+# 输入是腰部电机的旋转角度和旋转角速度，以及imu返回的四元数和角速度
 def transform_imu_data(waist_yaw, waist_yaw_omega, imu_quat, imu_omega):
+    # 躯干到骨盆的旋转矩阵
     RzWaist = R.from_euler("z", waist_yaw).as_matrix()
+    # 躯干到世界坐标系的旋转矩阵
     R_torso = R.from_quat([imu_quat[1], imu_quat[2], imu_quat[3], imu_quat[0]]).as_matrix()
+    # 骨盆到世界坐标系的旋转矩阵
     R_pelvis = np.dot(R_torso, RzWaist.T)
+    # 骨盆角速度为躯干角速度减去躯干绕骨盆的角速度
     w = np.dot(RzWaist, imu_omega[0]) - np.array([0, 0, waist_yaw_omega])
     return R.from_matrix(R_pelvis).as_quat()[[3, 0, 1, 2]], w

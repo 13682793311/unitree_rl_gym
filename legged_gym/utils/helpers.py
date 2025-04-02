@@ -188,4 +188,11 @@ class PolicyExporterLSTM(torch.nn.Module):
         traced_script_module = torch.jit.script(self)
         traced_script_module.save(path)
 
+def merge_dict(this: dict, other: dict):
+    """ Merging two dicts. if a key exists in both dict, the other's value will take priority
+    NOTE: This method is implemented in python>=3.9
+    """
+    output = this.copy()
+    output.update(other)
+    return output
     
