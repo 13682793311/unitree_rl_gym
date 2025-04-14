@@ -11,6 +11,46 @@ from legged_gym.utils import  get_args, export_policy_as_jit, task_registry, Log
 import numpy as np
 import torch
 
+import pygame
+from threading import Thread
+# 加入手柄控制
+x_vel_cmd, y_vel_cmd, yaw_vel_cmd = 0.0, 0.0, 0.0
+x_vel_max, y_vel_max, yaw_vel_max = 2.0, 2.0, 1.0
+
+joystick_use = True
+joystick_opened = False
+
+if joystick_use:
+
+    pygame.init()
+
+    try:
+        joystick = pygame.joystick.Joystick(0)
+        joystick.init()
+        joystick_opened = True
+    except Exception as e:
+        print(f"cannot open joystick device:{e}")
+
+    exit_flag = False
+
+    def handle_joystick_input():
+        global exit_flag, x_vel_cmd, y_vel_cmd, yaw_vel_cmd
+        
+        while not exit_flag:
+            pygame.event.get()
+
+            x_vel_cmd = -joystick.get_axis(1) * x_vel_max
+            y_vel_cmd = -joystick.get_axis(0) * y_vel_max
+            yaw_vel_cmd = -joystick.get_axis(3) * yaw_vel_max
+
+            pygame.time.delay(100)
+
+        # launch gamepad thread
+    if joystick_opened and joystick_use:
+        joystick_thread = Thread(target=handle_joystick_input)
+        joystick_thread.start()
+
+
 
 def play(args):
     env_cfg, train_cfg = task_registry.get_cfgs(name=args.task)
@@ -30,7 +70,7 @@ def play(args):
     obs = env.get_observations()
     # load policy
     train_cfg.runner.resume = True
-    ppo_runner, train_cfg = task_registry.make_alg_runner(env=env, name=args.task, args=args, train_cfg=train_cfg)
+    ppo_runner, train_cfg, _ = task_registry.make_alg_runner(env=env, name=args.task, args=args, train_cfg=train_cfg)
     policy = ppo_runner.get_inference_policy(device=env.device)
     
     # export policy as a jit module (used to run it from C++)
@@ -41,11 +81,22 @@ def play(args):
 
     for i in range(10*int(env.max_episode_length)):
         actions = policy(obs.detach())
+        if FIX_COMMAND:
+            env.commands[:, 0] = 0.5    # 1.0
+            env.commands[:, 1] = 0.
+            env.commands[:, 2] = 0.
+            env.commands[:, 3] = 0.
+        else:
+            env.commands[:, 0] = x_vel_cmd
+            env.commands[:, 1] = y_vel_cmd
+            env.commands[:, 2] = yaw_vel_cmd
+            env.commands[:, 3] = 0.
         obs, _, rews, dones, infos = env.step(actions.detach())
 
 if __name__ == '__main__':
     EXPORT_POLICY = True
     RECORD_FRAMES = False
     MOVE_CAMERA = False
+    FIX_COMMAND = False # whether to use joystick to control the robot
     args = get_args()
     play(args)

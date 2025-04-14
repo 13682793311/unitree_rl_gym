@@ -8,6 +8,45 @@ import torch
 import yaml
 
 
+import pygame
+from threading import Thread
+# 加入手柄控制
+x_vel_cmd, y_vel_cmd, yaw_vel_cmd = 0.0, 0.0, 0.0
+x_vel_max, y_vel_max, yaw_vel_max = 1.0, 1.0, 1.0
+
+joystick_use = True
+joystick_opened = False
+
+if joystick_use:
+
+    pygame.init()
+
+    try:
+        joystick = pygame.joystick.Joystick(0)
+        joystick.init()
+        joystick_opened = True
+    except Exception as e:
+        print(f"cannot open joystick device:{e}")
+
+    exit_flag = False
+
+    def handle_joystick_input():
+        global exit_flag, x_vel_cmd, y_vel_cmd, yaw_vel_cmd
+        
+        while not exit_flag:
+            pygame.event.get()
+
+            x_vel_cmd = -joystick.get_axis(1) * x_vel_max
+            y_vel_cmd = -joystick.get_axis(0) * y_vel_max
+            yaw_vel_cmd = -joystick.get_axis(3) * yaw_vel_max
+
+            pygame.time.delay(100)
+
+        # launch gamepad thread
+    if joystick_opened and joystick_use:
+        joystick_thread = Thread(target=handle_joystick_input)
+        joystick_thread.start()
+
 def get_gravity_orientation(quaternion):
     qw = quaternion[0]
     qx = quaternion[1]
@@ -31,7 +70,7 @@ def pd_control(target_q, q, kp, target_dq, dq, kd):
 if __name__ == "__main__":
     # get config file name from command line
     import argparse
-
+    FIX_COMMAND = False
     parser = argparse.ArgumentParser()
     parser.add_argument("config_file", type=str, help="config file name in the config folder")
     args = parser.parse_args()
@@ -94,6 +133,16 @@ if __name__ == "__main__":
         start = time.time()
         while viewer.is_running() and time.time() - start < simulation_duration:
             step_start = time.time()
+            if FIX_COMMAND:
+                cmd[0] = 0.5    # 1.0
+                cmd[1] = 0.
+                cmd[2] = 0.
+                #cmd[3] = 0.
+            else:
+                cmd[0] = x_vel_cmd
+                cmd[1] = y_vel_cmd
+                cmd[2] = yaw_vel_cmd
+                #cmd[3] = 0.
             # 低级控制器
             tau = pd_control(target_dof_pos, d.qpos[7:], kps, np.zeros_like(kds), d.qvel[6:], kds)
             d.ctrl[:] = tau

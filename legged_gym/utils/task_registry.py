@@ -125,7 +125,8 @@ class TaskRegistry():
             resume_path = get_load_path(log_root, load_run=train_cfg.runner.load_run, checkpoint=train_cfg.runner.checkpoint)
             print(f"Loading model from: {resume_path}")
             runner.load(resume_path)
-        return runner, train_cfg
+        print("log_dir: ", log_dir)
+        return runner, train_cfg,log_dir
 
 # make global task registry
 task_registry = TaskRegistry()

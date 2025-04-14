@@ -118,6 +118,11 @@ class LeggedRobotCfg(BaseConfig):
             feet_slip = -0.
             foot_clearance = -0.
             
+            ### 倒立相关奖励 ###
+            handstand_feet_height_exp = 0.0
+            handstand_feet_on_air = 0.0
+            handstand_feet_air_time = 0.0
+            handstand_orientation_l2 = -0.0
 
         only_positive_rewards = True # if true negative total rewards are clipped at zero (avoids early termination problems)
         tracking_sigma = 0.25 # tracking reward = exp(-error^2/sigma)
@@ -126,7 +131,22 @@ class LeggedRobotCfg(BaseConfig):
         soft_torque_limit = 1.
         base_height_target = 1.
         max_contact_force = 100. # forces above this value are penalized
-        clearance_height_target = -0.5
+        clearance_height_target = -0.5 # 脚部离地高度与基座的距离
+
+    class params:  # 参数单独放在params类中
+        handstand_feet_height_exp = {
+            "target_height": 0.5,     # 脚的离地目标高度
+            "std": 0.5
+        }
+        handstand_orientation_l2 = {
+            "target_gravity": [-1.0, 0.0, 0.0]
+        }
+        handstand_feet_air_time = {
+            "threshold": 5.0
+        }
+        feet_name_reward={
+            "feet_name" : "F.*_foot"
+        }
 
     class normalization:
         class obs_scales:

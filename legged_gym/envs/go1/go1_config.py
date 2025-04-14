@@ -21,9 +21,9 @@ class GO1RoughCfg( LeggedRobotCfg ):
         }
 
     class env(LeggedRobotCfg.env):
-        num_envs = 4096
-        num_observations = 45      # no use,use obs_components
-        num_privileged_obs = 235    # 48+11*17
+        num_envs = 2048 # 4096
+        num_observations = 45      # 45
+        num_privileged_obs = 235    # 48+11*17=235
         
         use_lin_vel = False
         num_actions = 12
@@ -47,80 +47,8 @@ class GO1RoughCfg( LeggedRobotCfg ):
             latency_range = [0.005, 0.045] # [s]
             latency_resampling_time = 5.0 # [s]
 
-    # 改写terrain类
-    # class terrain:
-    #     #selected = "TerrainPerlin" # TerrainPerlin,Terrain,BarrierTrack
-    #     selected = None
-    #     mesh_type = "trimesh" # "heightfield" # none, plane, heightfield or trimesh
-    #     curriculum = True
-    #     measure_heights = True   # 狗周围一部分区域的高程图
-    #     measured_points_x = [i for i in np.arange(-0.5, 1.51, 0.1)]
-    #     measured_points_y = [i for i in np.arange(-0.5, 0.51, 0.1)]
-    #     horizontal_scale = 0.025 # [m]
-    #     vertical_scale = 0.005 # [m]
-    #     border_size = 5 # [m]
-    #     curriculum = False
-    #     static_friction = 1.0
-    #     dynamic_friction = 1.0
-    #     restitution = 0.
-    #     max_init_terrain_level = 5 # starting curriculum state
-    #     terrain_length = 4.
-    #     terrain_width = 4.
-    #     num_rows= 16 # number of terrain rows (levels)
-    #     num_cols = 16 # number of terrain cols (types)
-    #     slope_treshold = 1.
-    #     # 障碍物的配置
-    #     BarrierTrack_kwargs = dict(
-    #         options= [
-    #             # "jump",
-    #             # "crawl",
-    #             # "tilt",
-    #             # "leap",
-    #         ], # each race track will permute all the options
-    #         track_width= 1.6,
-    #         track_block_length= 2., # the x-axis distance from the env origin point
-    #         wall_thickness= (0.04, 0.2), # [m]
-    #         wall_height= -0.05,
-    #         jump= dict(
-    #             height= (0.2, 0.6),
-    #             depth= (0.1, 0.8), # size along the forward axis
-    #             fake_offset= 0.0, # [m] an offset that make the robot easier to get into the obstacle
-    #             jump_down_prob= 0., # probability of jumping down use it in non-virtual terrain
-    #         ),
-    #         crawl= dict(
-    #             height= (0.25, 0.5),
-    #             depth= (0.1, 0.6), # size along the forward axis
-    #             wall_height= 0.6,
-    #             no_perlin_at_obstacle= False,
-    #         ),
-    #         tilt= dict(
-    #             width= (0.24, 0.32),
-    #             depth= (0.4, 1.), # size along the forward axis
-    #             opening_angle= 0.0, # [rad] an opening that make the robot easier to get into the obstacle
-    #             wall_height= 0.5,
-    #         ),
-    #         leap= dict(
-    #             length= (0.2, 1.0),
-    #             depth= (0.4, 0.8),
-    #             height= 0.2,
-    #         ),
-    #         add_perlin_noise= True,
-    #         border_perlin_noise= True,
-    #         border_height= 0.,
-    #         virtual_terrain= False,
-    #         draw_virtual_terrain= True,
-    #         engaging_next_threshold= 1.2,
-    #         engaging_finish_threshold= 0.,
-    #         curriculum_perlin= False,
-    #         no_perlin_threshold= 0.1,
-    #     )
-    #     # 柏林噪声的配置
-    #     TerrainPerlin_kwargs = dict(
-    #         zScale= 0.07,
-    #         frequency= 10,
-    #     )
     class terrain(LeggedRobotCfg.terrain):
-        selected = False # select a unique terrain type and pass all arguments
+        selected = 'Terrain' # select a unique terrain type and pass all arguments
         terrain_kwargs = None # Dict of arguments for selected terrain
         
         # 地形的表示形式：trimesh是三角网络，heightfield是二维网络
@@ -145,7 +73,7 @@ class GO1RoughCfg( LeggedRobotCfg ):
         measured_points_y = [-0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5]
         
         # 初始化地形的状态等级
-        max_init_terrain_level = 5 # starting curriculum state
+        max_init_terrain_level = 7 # starting curriculum state   # 增大地形难度
         terrain_length = 8.
         terrain_width = 8.
         num_rows= 10 # number of terrain rows (levels)
@@ -158,7 +86,31 @@ class GO1RoughCfg( LeggedRobotCfg ):
         # trimesh only:
         slope_treshold = 0.75 # slopes above this threshold will be corrected to vertical surfaces
 
-        
+    # class terrain(LeggedRobotCfg.terrain):
+    #     selected = 'TerrainPerlin'
+    #     mesh_type = None
+    #     measure_heights = True
+    #     # x: [-0.5, 1.5], y: [-0.5, 0.5] range for go2
+    #     measured_points_x = [-0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+    #     measured_points_y = [-0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5]
+    #     horizontal_scale = 0.025 # [m]
+    #     vertical_scale = 0.005 # [m]
+    #     border_size = 5 # [m]
+    #     curriculum = True
+    #     static_friction = 1.0
+    #     dynamic_friction = 1.0
+    #     restitution = 0.
+    #     max_init_terrain_level = 5 # starting curriculum state
+    #     terrain_length = 4. #4.
+    #     terrain_width = 4.  #4.
+    #     num_rows= 16 # number of terrain rows (levels)
+    #     num_cols = 16 # number of terrain cols (types)
+    #     slope_treshold = 1.
+
+    #     TerrainPerlin_kwargs = dict(
+    #         zScale= 0.07,
+    #         frequency= 10,
+    #     )    
     
     class commands(LeggedRobotCfg.commands):
         curriculum = True
@@ -168,8 +120,8 @@ class GO1RoughCfg( LeggedRobotCfg ):
         heading_command = True # if true: compute ang vel command from heading error
 
         class ranges:
-            lin_vel_x = [-1.0, 1.0] # min max [m/s]
-            lin_vel_y = [-1.0, 1.0]   # min max [m/s]
+            lin_vel_x = [-2.0, 2.0] # min max [m/s]
+            lin_vel_y = [-2.0, 2.0]   # min max [m/s]   # 增大速度的变化值
             ang_vel_yaw = [-1, 1]    # min max [rad/s]
             heading = [-3.14, 3.14]
 
@@ -194,28 +146,28 @@ class GO1RoughCfg( LeggedRobotCfg ):
         flip_visual_attachments = False
 
         # 加入关节限制
-        sdk_dof_range = dict(
-            Hip_max = 1.047,
-            Hip_min = -1.047,
-            Thigh_max = 2.966,
-            Thigh_min = -0.663,
-            Calf_max = -0.837,
-            Calf_min = -2.721
-        )
+    #     sdk_dof_range = dict(
+    #         Hip_max = 1.047,
+    #         Hip_min = -1.047,
+    #         Thigh_max = 2.966,
+    #         Thigh_min = -0.663,
+    #         Calf_max = -0.837,
+    #         Calf_min = -2.721
+    #     )
     
-    # 加入更多的终止条件
-    class termination:
-        termination_terms = [
-            "roll",
-            "pitch",
-        ]
+    # # 加入更多的终止条件
+    # class termination:
+    #     termination_terms = [
+    #         "roll",
+    #         "pitch",
+    #     ]
 
-        roll_kwargs = dict(
-            threshold= 3.0, # [rad]
-        )
-        pitch_kwargs = dict(
-            threshold= 3.0, # [rad] # for leap, jump
-        )
+    #     roll_kwargs = dict(
+    #         threshold= 3.0, # [rad]
+    #     )
+    #     pitch_kwargs = dict(
+    #         threshold= 3.0, # [rad] # for leap, jump
+    #     )
 
     class domain_rand:
         randomize_friction = True
@@ -237,32 +189,64 @@ class GO1RoughCfg( LeggedRobotCfg ):
     class rewards( LeggedRobotCfg.rewards ):
         soft_dof_pos_limit = 0.9
         base_height_target = 0.34
-        clearance_height_target = -0.1
+        clearance_height_target = -0.0
         class scales( LeggedRobotCfg.rewards.scales ):
             
             termination = -0.0
-            tracking_lin_vel = 2.0
+            tracking_lin_vel = 1.0  # 1.0
             tracking_ang_vel = 0.5
             lin_vel_z = -2.0
-            ang_vel_xy = -0.05
-            orientation = -0.
-            torques = -0.00001
+            ang_vel_xy = -0.05      # 惩罚基座在xy轴上的角速度
+            orientation = -2.0      # 保持基座水平
+            torques = -0.0002
             dof_vel = -0.
             dof_acc = -2.5e-7
             base_height = -0. 
-            feet_air_time =  1.0
+            feet_air_time =  0.
             collision = -1.
-            feet_stumble = -0.0 
-            action_rate = -0.01
-            stand_still = -0.
+            feet_stumble = -0.5       # 机器人绊脚
+            action_rate = -0.02      # 动作变化率
+            stand_still = -0.5       # 在没有命令的情况下保持静止
             feet_slip = -0.
             foot_clearance = -0.
     
-
+    ############# 直立 ##################
+    # class rewards:
+    #     class scales:
+    #         termination = -0.0
+    #         tracking_lin_vel = 2.0      # 减小追踪线速度
+    #         tracking_ang_vel = 1.5
+    #         lin_vel_z = -0.0
+    #         ang_vel_xy = -0.0
+    #         orientation = -0.0
+    #         torques = -0.0002
+    #         dof_pos_limits = -10.0
+    #         dof_vel = -0.
+    #         dof_acc = -2.5e-7
+    #         base_height = -0.
+    #         feet_air_time = 0.0
+    #         collision = -1.
+    #         feet_stumble = -0.0 
+    #         action_rate = -0.01
+    #         stand_still = -0.
+    #         handstand_feet_height_exp = 100.0    # 修改后无明显变化
+    #         handstand_feet_on_air = 1.0
+    #         handstand_feet_air_time = 1.0
+    #         handstand_orientation_l2 = -1.0
+            
+    #     only_positive_rewards = False # if true negative total rewards are clipped at zero (avoids early termination problems)
+    #     tracking_sigma = 0.25 # tracking reward = exp(-error^2/sigma)
+    #     soft_dof_pos_limit = 0.9 # percentage of urdf limits, values above this limit are penalized
+    #     soft_dof_vel_limit = 1.
+    #     soft_torque_limit = 1.
+    #     base_height_target = 0.25
+    #     max_contact_force = 100. # forces above this value are penalized
+    ######################################
     class normalization(LeggedRobotCfg.normalization):
         class obs_scales(LeggedRobotCfg.normalization.obs_scales):
             lin_vel = 2.0
             ang_vel = 0.25
+            heading = 1.0
             dof_pos = 1.0
             dof_vel = 0.05
             height_measurements = 5.0
@@ -281,8 +265,14 @@ class GO1RoughCfgPPO( LeggedRobotCfgPPO ):
     class algorithm( LeggedRobotCfgPPO.algorithm ):
         entropy_coef = 0.01
     class runner( LeggedRobotCfgPPO.runner ):
-        max_iterations = 800
-        run_name = 'full'
-        experiment_name = 'rough_go1'
+        policy_class_name = 'ActorCritic'
+        max_iterations = 1500
+        run_name = 'cmd_x_2'
+        experiment_name = 'go1_climbsteps' # go1爬楼梯
 
+         # Load and resume
+        resume = False # 断点重训
+        load_run = '/home/kami/unitree_rl_dataset/unitree_rl_gym/logs/go1_climbsteps/Apr10_20-48-47_cmd_x_2' # -1 = last run 
+        checkpoint = '3000'  # -1 = last saved model
+        resume_path = None  # updated from load_run and chkpt
   
