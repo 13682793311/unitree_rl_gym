@@ -7,15 +7,20 @@ from legged_gym import LEGGED_GYM_ROOT_DIR
 import isaacgym
 from legged_gym.envs import *
 from legged_gym.utils import  get_args, export_policy_as_jit, task_registry, Logger
-
+from legged_gym.utils import  export_estimator_as_jit
 import numpy as np
 import torch
 
 import pygame
 from threading import Thread
+
+#import matplotlib as plt
+# 加入状态观测（角速度，线速度）
+
+
 # 加入手柄控制
 x_vel_cmd, y_vel_cmd, yaw_vel_cmd = 0.0, 0.0, 0.0
-x_vel_max, y_vel_max, yaw_vel_max = 2.0, 2.0, 1.0
+x_vel_max, y_vel_max, yaw_vel_max = 1.0, 1.0, 1.0
 
 joystick_use = True
 joystick_opened = False
@@ -72,14 +77,23 @@ def play(args):
     train_cfg.runner.resume = True
     ppo_runner, train_cfg, _ = task_registry.make_alg_runner(env=env, name=args.task, args=args, train_cfg=train_cfg)
     policy = ppo_runner.get_inference_policy(device=env.device)
-    
+    # 获取估计器的模型
+    estimator = ppo_runner.get_inference_estimator(device=env.device)
     # export policy as a jit module (used to run it from C++)
     if EXPORT_POLICY:
         path = os.path.join(LEGGED_GYM_ROOT_DIR, 'logs', train_cfg.runner.experiment_name, 'exported', 'policies')
         export_policy_as_jit(ppo_runner.alg.actor_critic, path)
         print('Exported policy as jit script to: ', path)
 
+    if EXPORT_ESTIMATOR:
+        path = os.path.join(LEGGED_GYM_ROOT_DIR, 'logs', train_cfg.runner.experiment_name, 'exported', 'estimators')
+        export_estimator_as_jit(ppo_runner.alg.estimator, path)
+        print('Exported estimator as jit script to: ', path)
+
+    # 加入实际线速度
     for i in range(10*int(env.max_episode_length)):
+        priv_latent = estimator(obs[:,9:45+9].detach())
+        obs[:,:9] = priv_latent
         actions = policy(obs.detach())
         if FIX_COMMAND:
             env.commands[:, 0] = 0.5    # 1.0
@@ -95,6 +109,7 @@ def play(args):
 
 if __name__ == '__main__':
     EXPORT_POLICY = True
+    EXPORT_ESTIMATOR = True
     RECORD_FRAMES = False
     MOVE_CAMERA = False
     FIX_COMMAND = False # whether to use joystick to control the robot

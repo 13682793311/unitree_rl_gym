@@ -196,3 +196,15 @@ def merge_dict(this: dict, other: dict):
     output.update(other)
     return output
     
+def export_estimator_as_jit(estimator, path):
+    os.makedirs(path, exist_ok=True)
+    path = os.path.join(path, 'estimator.pt')
+    
+    # 将估计器模型转移到CPU
+    model = copy.deepcopy(estimator.estimator).to('cpu')
+    
+    # 使用torch.jit.script将模型转换为Torch Script格式
+    traced_script_module = torch.jit.script(model)
+    
+    # 保存导出的模型
+    traced_script_module.save(path)

@@ -6,7 +6,9 @@ import numpy as np
 import sys
 
 from rsl_rl.env import VecEnv
+from rsl_rl.runners import MYOnPolicyRunner
 from rsl_rl.runners import OnPolicyRunner
+
 
 from legged_gym import LEGGED_GYM_ROOT_DIR, LEGGED_GYM_ENVS_DIR
 from .helpers import get_args, update_cfg_from_args, class_to_dict, get_load_path, set_seed, parse_sim_params
@@ -73,7 +75,7 @@ class TaskRegistry():
         
         return env, env_cfg
 
-    def make_alg_runner(self, env, name=None, args=None, train_cfg=None, log_root="default") -> Tuple[OnPolicyRunner, LeggedRobotCfgPPO]:
+    def make_alg_runner(self, env, name=None, args=None, train_cfg=None, log_root="default") -> Tuple[MYOnPolicyRunner, LeggedRobotCfgPPO]:
         """ Creates the training algorithm  either from a registered namme or from the provided config file.
 
         Args:
@@ -117,7 +119,7 @@ class TaskRegistry():
         
         train_cfg_dict = class_to_dict(train_cfg)
         
-        runner = OnPolicyRunner(env, train_cfg_dict, log_dir, device=args.rl_device)
+        runner = MYOnPolicyRunner(env, train_cfg_dict, log_dir, device=args.rl_device)
         #save resume path before creating a new log_dir
         resume = train_cfg.runner.resume
         if resume:
