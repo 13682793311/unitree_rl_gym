@@ -26,11 +26,13 @@ class GO1RoughCfg( LeggedRobotCfg ):
         num_privileged_obs = 235    # 48+11*17=235
         
         use_lin_vel = False
-
+        history_encoding = True
         n_priv = 9  # 预估的线速度
         n_proprio = 45 # 普通观测
+        history_len = 10  # 历史数据的长度
+        n_priv_latent = 4 + 1 + 12 +12   # 显式优先观测量
 
-        num_observations = n_priv+n_proprio  # 54
+        num_observations = n_proprio + n_priv + n_priv_latent + history_len*n_proprio 
         # 给actor的观测
         #num_observations = n_proprio + n_scan + history_len*n_proprio + n_priv_latent + n_priv #n_scan + n_proprio + n_priv #187 + 47 + 5 + 12 
         # 给critic的观测
@@ -123,6 +125,11 @@ class GO1RoughCfg( LeggedRobotCfg ):
         push_robots = True
         push_interval_s = 15
         max_push_vel_xy = 1.
+
+        randomize_base_com = True
+        added_com_range = [-0.2, 0.2]
+        randomize_motor = True
+        motor_strength_range = [0.8, 1.2]
         class com_range:
             x = [-0.05, 0.15]
             y = [-0.1, 0.1]
@@ -171,13 +178,31 @@ class GO1RoughCfg( LeggedRobotCfg ):
         clip_actions = 100.
 
 class GO1RoughCfgPPO( LeggedRobotCfgPPO ):
+    class policy:
+        init_noise_std = 1.0
+        continue_from_last_std = True
+        #scan_encoder_dims = [128, 64, 32]
+        actor_hidden_dims = [512, 256, 128]
+        critic_hidden_dims = [512, 256, 128]
+        priv_encoder_dims = [64, 20]
+        activation = 'elu' # can be elu, relu, selu, crelu, lrelu, tanh, sigmoid
+        # only for 'ActorCriticRecurrent':
+        rnn_type = 'lstm'
+        rnn_hidden_size = 512
+        rnn_num_layers = 1
+
+        tanh_encoder_output = False 
+    
     class algorithm( LeggedRobotCfgPPO.algorithm ):
         entropy_coef = 0.01
+        dagger_update_freq = 20
+        priv_reg_coef_schedual = [0, 0.1, 2000, 3000]
+        priv_reg_coef_schedual_resume = [0, 0.1, 0, 1]
     class runner( LeggedRobotCfgPPO.runner ):
         policy_class_name = 'MYActorCritic'
         algorithm_class_name = 'MYPPO'
         max_iterations = 800
-        run_name = 'cmd_x_2'
+        run_name = 'RMA'
         experiment_name = 'go1_climbsteps' # go1爬楼梯
 
          # Load and resume
