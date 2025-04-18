@@ -33,10 +33,7 @@ class GO1RoughCfg( LeggedRobotCfg ):
         n_priv_latent = 4 + 1 + 12 +12   # 显式优先观测量
 
         num_observations = n_proprio + n_priv + n_priv_latent + history_len*n_proprio 
-        # 给actor的观测
-        #num_observations = n_proprio + n_scan + history_len*n_proprio + n_priv_latent + n_priv #n_scan + n_proprio + n_priv #187 + 47 + 5 + 12 
-        # 给critic的观测
-        #num_privileged_obs = None # if not None a priviledge_obs_buf will be returned by step() (critic obs for assymetric training). None is returned otherwise 
+        
         
         num_actions = 12
         env_spacing = 3.  # not used with heightfields/trimeshes 

@@ -63,6 +63,14 @@ class Go1Robot(LeggedRobot):
             self.motor_strength[1] - 1
         ), dim=-1)
         
+        self.privileged_obs_buf = torch.cat((       self.base_lin_vel * self.obs_scales.lin_vel,            # 3 
+                                    self.base_ang_vel  * self.obs_scales.ang_vel,           # 3
+                                    self.projected_gravity,                                 # 3
+                                    self.commands[:, :3] * self.commands_scale,             # 3
+                                    (self.dof_pos - self.default_dof_pos) * self.obs_scales.dof_pos, # 12
+                                    self.dof_vel * self.obs_scales.dof_vel,   #  12
+                                    self.actions  # 12
+                                    ),dim=-1)
         
         # 加入扫描点信息
         if self.cfg.terrain.measure_heights:
