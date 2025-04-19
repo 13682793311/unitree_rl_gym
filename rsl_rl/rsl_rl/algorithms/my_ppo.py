@@ -40,8 +40,6 @@ class MYPPO:
     actor_critic: ActorCritic
     def __init__(self,
                  actor_critic,           # 由外部传入的actorcritic网络
-                 estimator,              # 由外部传入的估计器
-                 estimator_paras,        # 估计器的参数
                  num_learning_epochs=1,  # 对整批数据做训练时的更新次数
                  num_mini_batches=1,     # 每个epoch内将数据切分为mini-batch数量，用于小批量梯度下降
                  clip_param=0.2,         # 用于PPO策略更新时剪切的超参数，防止策略更新幅度过大
@@ -84,17 +82,9 @@ class MYPPO:
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
 
-        # Estimator 估计器的配置
-        self.estimator = estimator
-        self.priv_states_dim = estimator_paras["priv_states_dim"]
-        self.num_prop = estimator_paras["num_prop"]
-        #self.num_scan = estimator_paras["num_scan"]
-        self.estimator_optimizer = optim.Adam(self.estimator.parameters(), lr=estimator_paras["learning_rate"])
-        self.train_with_estimated_states = estimator_paras["train_with_estimated_states"]
-
         # 历史编码器的配置
         self.hist_encoder_optimizer = optim.Adam(self.actor_critic.actor.history_encoder.parameters(), lr=learning_rate)
-        self.priv_reg_coef_schedual = priv_reg_coef_schedual
+        # self.priv_reg_coef_schedual = priv_reg_coef_schedual
         self.counter = 0
 
     def init_storage(self, num_envs, num_transitions_per_env, actor_obs_shape, critic_obs_shape, action_shape):
@@ -113,14 +103,9 @@ class MYPPO:
         if self.actor_critic.is_recurrent:
             self.transition.hidden_states = self.actor_critic.get_hidden_states()
         # Compute the actions and values
-        if self.train_with_estimated_states:
-            obs_est = obs.clone()
-            # 使用估计器去估计线速度
-            priv_states_estimated = self.estimator(obs_est[:, self.priv_states_dim:self.priv_states_dim+self.num_prop])
-            obs_est[:, :self.priv_states_dim] = priv_states_estimated
         
         # 生成动作并保存到过渡数据中，.detach()表示不需要计算梯度
-        self.transition.actions = self.actor_critic.act(obs_est, hist_encoding).detach()
+        self.transition.actions = self.actor_critic.act(obs, hist_encoding).detach()
         # 利用critic网络计算当前状态的值函数
         self.transition.values = self.actor_critic.evaluate(critic_obs).detach()
         # 所采样动作在当前策略下的对数概率
@@ -181,21 +166,16 @@ class MYPPO:
 
                 # 历史观测器
                 priv_latent_batch = self.actor_critic.actor.infer_priv_latent(obs_batch)
+                scan_latent_batch = self.actor_critic.actor.infer_scan_latent(obs_batch)
                 with torch.inference_mode():
                     hist_latent_batch = self.actor_critic.actor.infer_hist_latent(obs_batch)
-                priv_reg_loss = (priv_latent_batch - hist_latent_batch.detach()).norm(p=2, dim=1).mean()
-                priv_reg_stage = min(max((self.counter - self.priv_reg_coef_schedual[2]), 0) / self.priv_reg_coef_schedual[3], 1)
-                priv_reg_coef = priv_reg_stage * (self.priv_reg_coef_schedual[1] - self.priv_reg_coef_schedual[0]) + self.priv_reg_coef_schedual[0]
-
-
-                # Estimator,将估计出来的线速度和真实的线速度进行比较
-                priv_states_predicted = self.estimator(obs_batch[:, self.priv_states_dim:self.priv_states_dim+self.num_prop])  # obs in batch is with true priv_states
-                estimator_loss = (priv_states_predicted - obs_batch[:, :self.priv_states_dim]).pow(2).mean()
-                self.estimator_optimizer.zero_grad()
-                estimator_loss.backward()
-                nn.utils.clip_grad_norm_(self.estimator.parameters(), self.max_grad_norm)
-                self.estimator_optimizer.step()
+                latent_batch = torch.cat((scan_latent_batch, priv_latent_batch), dim=1)
                 
+                priv_reg_loss = (latent_batch - hist_latent_batch.detach()).norm(p=2, dim=1).mean()
+                # priv_reg_stage = min(max((self.counter - self.priv_reg_coef_schedual[2]), 0) / self.priv_reg_coef_schedual[3], 1)
+                # priv_reg_coef = priv_reg_stage * (self.priv_reg_coef_schedual[1] - self.priv_reg_coef_schedual[0]) + self.priv_reg_coef_schedual[0]
+
+
                 
                 # KL散度计算，如果KL散度过大或过小，调整学习率以保持训练的稳定性
                 if self.desired_kl != None and self.schedule == 'adaptive':
@@ -240,17 +220,15 @@ class MYPPO:
                 # 平均损失记录
                 mean_value_loss += value_loss.item()
                 mean_surrogate_loss += surrogate_loss.item()
-                mean_estimator_loss += estimator_loss.item()
                 mean_priv_reg_loss += priv_reg_loss.item()
 
         num_updates = self.num_learning_epochs * self.num_mini_batches
         mean_value_loss /= num_updates
         mean_surrogate_loss /= num_updates
-        mean_estimator_loss /= num_updates
         mean_priv_reg_loss /= num_updates
         self.storage.clear()
 
-        return mean_value_loss, mean_surrogate_loss, mean_estimator_loss
+        return mean_value_loss, mean_surrogate_loss, mean_priv_reg_loss
     
     # 历史编码器更新
     def update_dagger(self):
@@ -267,8 +245,10 @@ class MYPPO:
                 # Adaptation module update
                 with torch.inference_mode():
                     priv_latent_batch = self.actor_critic.actor.infer_priv_latent(obs_batch)
+                    scan_latent_batch = self.actor_critic.actor.infer_scan_latent(obs_batch)
                 hist_latent_batch = self.actor_critic.actor.infer_hist_latent(obs_batch)
-                hist_latent_loss = (priv_latent_batch.detach() - hist_latent_batch).norm(p=2, dim=1).mean()
+                latent_batch = torch.cat((scan_latent_batch, priv_latent_batch), dim=1)
+                hist_latent_loss = (latent_batch.detach() - hist_latent_batch).norm(p=2, dim=1).mean()
                 self.hist_encoder_optimizer.zero_grad()
                 hist_latent_loss.backward()
                 nn.utils.clip_grad_norm_(self.actor_critic.actor.history_encoder.parameters(), self.max_grad_norm)

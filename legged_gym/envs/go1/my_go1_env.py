@@ -50,38 +50,42 @@ class Go1Robot(LeggedRobot):
                                     self.dof_vel * self.obs_scales.dof_vel,   #  12
                                     self.actions  # 12
                                     ),dim=-1)
-        # 线速度估计量
-        priv_explicit = torch.cat((self.base_lin_vel * self.obs_scales.lin_vel,
-                                   0 * self.base_lin_vel,
-                                   0 * self.base_lin_vel), dim=-1)
+        # # 线速度估计量
+        # priv_explicit = torch.cat((self.base_lin_vel * self.obs_scales.lin_vel,
+        #                            0 * self.base_lin_vel,
+        #                            0 * self.base_lin_vel), dim=-1)
         
         # 优先观测，可以考虑加入抬腿高度等优先观测
         priv_latent = torch.cat((
+            self.base_lin_vel * self.obs_scales.lin_vel,           
             self.mass_params_tensor,
             self.friction_coeffs_tensor,
             self.motor_strength[0] - 1, 
             self.motor_strength[1] - 1
         ), dim=-1)
         
-        self.privileged_obs_buf = torch.cat((       self.base_lin_vel * self.obs_scales.lin_vel,            # 3 
-                                    self.base_ang_vel  * self.obs_scales.ang_vel,           # 3
-                                    self.projected_gravity,                                 # 3
-                                    self.commands[:, :3] * self.commands_scale,             # 3
-                                    (self.dof_pos - self.default_dof_pos) * self.obs_scales.dof_pos, # 12
-                                    self.dof_vel * self.obs_scales.dof_vel,   #  12
-                                    self.actions  # 12
-                                    ),dim=-1)
+        # self.privileged_obs_buf = torch.cat((       self.base_lin_vel * self.obs_scales.lin_vel,            # 3 
+        #                             self.base_ang_vel  * self.obs_scales.ang_vel,           # 3
+        #                             self.projected_gravity,                                 # 3
+        #                             self.commands[:, :3] * self.commands_scale,             # 3
+        #                             (self.dof_pos - self.default_dof_pos) * self.obs_scales.dof_pos, # 12
+        #                             self.dof_vel * self.obs_scales.dof_vel,   #  12
+        #                             self.actions  # 12
+        #                             ),dim=-1)
         
+
         # 加入扫描点信息
         if self.cfg.terrain.measure_heights:
-            #self.root_states[:, 2].unsqueeze(1) 的形状为 (num_envs, 1)，而 self.measured_heights 通常的形状是 (num_envs, num_height_points)
-            #PyTorch 的广播机制会自动将形状为 (num_envs, 1) 的张量沿第二个维度扩展成 (num_envs, num_height_points)，从而使得两者能够做逐元素的相减操作。
             heights = torch.clip(self.root_states[:, 2].unsqueeze(1) - 0.5 - self.measured_heights, -1, 1.) * self.obs_scales.height_measurements
-            self.privileged_obs_buf = torch.cat((self.privileged_obs_buf, heights), dim=-1)
         
         
-        self.obs_buf = torch.cat([obs_buf, priv_explicit, priv_latent, self.obs_history_buf.view(self.num_envs, -1)], dim=-1)
+        self.obs_buf = torch.cat((
+                                    obs_buf,
+                                    priv_latent,
+                                    heights, 
+                                    self.obs_history_buf.view(self.num_envs, -1)), dim=-1)
 
+        
         # 更新历史观测
         self.obs_history_buf = torch.where(
             (self.episode_length_buf <= 1)[:, None, None], 

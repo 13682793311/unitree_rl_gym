@@ -65,7 +65,7 @@ def play(args):
     env_cfg.terrain.num_cols = 5
     env_cfg.terrain.curriculum = False
     env_cfg.noise.add_noise = False
-    env_cfg.domain_rand.randomize_friction = False
+    env_cfg.domain_rand.randomize_friction = True
     env_cfg.domain_rand.push_robots = False
 
     env_cfg.env.test = True
@@ -78,23 +78,19 @@ def play(args):
     ppo_runner, train_cfg, _ = task_registry.make_alg_runner(env=env, name=args.task, args=args, train_cfg=train_cfg)
     policy = ppo_runner.get_inference_policy(device=env.device)
     # 获取估计器的模型
-    estimator = ppo_runner.get_inference_estimator(device=env.device)
+    #estimator = ppo_runner.get_inference_estimator(device=env.device)
     # export policy as a jit module (used to run it from C++)
     if EXPORT_POLICY:
         path = os.path.join(LEGGED_GYM_ROOT_DIR, 'logs', train_cfg.runner.experiment_name, 'exported', 'policies')
         export_policy_as_jit(ppo_runner.alg.actor_critic, path)
         print('Exported policy as jit script to: ', path)
 
-    if EXPORT_ESTIMATOR:
-        path = os.path.join(LEGGED_GYM_ROOT_DIR, 'logs', train_cfg.runner.experiment_name, 'exported', 'estimators')
-        export_estimator_as_jit(ppo_runner.alg.estimator, path)
-        print('Exported estimator as jit script to: ', path)
-
-    # 加入实际线速度
+    
     for i in range(10*int(env.max_episode_length)):
-        priv_latent = estimator(obs[:,9:45+9].detach())
-        obs[:,:9] = priv_latent
-        actions = policy(obs.detach())
+        # 进行切片,只输入历史信息和当前状态
+        proprio_obs = obs[:,:env_cfg.n_proprio]
+        hist_obs = obs[:, -env_cfg.num_hist*env_cfg.num_prop:]
+        actions = policy(obs.detach(), hist_encoding = True)
         if FIX_COMMAND:
             env.commands[:, 0] = 0.5    # 1.0
             env.commands[:, 1] = 0.
@@ -109,7 +105,6 @@ def play(args):
 
 if __name__ == '__main__':
     EXPORT_POLICY = True
-    EXPORT_ESTIMATOR = True
     RECORD_FRAMES = False
     MOVE_CAMERA = False
     FIX_COMMAND = False # whether to use joystick to control the robot

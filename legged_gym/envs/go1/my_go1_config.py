@@ -23,16 +23,16 @@ class GO1RoughCfg( LeggedRobotCfg ):
     class env(LeggedRobotCfg.env):
         num_envs = 2048 # 4096
         
-        num_privileged_obs = 235    # 48+11*17=235
+        # num_privileged_obs = 235    # 48+11*17=235
         
         use_lin_vel = False
         history_encoding = True
-        n_priv = 9  # 预估的线速度
+        # n_priv = 9  # 预估的线速度
         n_proprio = 45 # 普通观测
         history_len = 10  # 历史数据的长度
-        n_priv_latent = 4 + 1 + 12 +12   # 显式优先观测量
-
-        num_observations = n_proprio + n_priv + n_priv_latent + history_len*n_proprio 
+        n_priv_latent = 3 + 4 + 1 + 12 +12   # 显式优先观测量
+        n_scan = 11 * 17
+        num_observations = n_proprio + n_priv_latent + n_scan + history_len*n_proprio 
         
         
         num_actions = 12
@@ -178,7 +178,7 @@ class GO1RoughCfgPPO( LeggedRobotCfgPPO ):
     class policy:
         init_noise_std = 1.0
         continue_from_last_std = True
-        #scan_encoder_dims = [128, 64, 32]
+        scan_encoder_dims = [128, 64, 32]
         actor_hidden_dims = [512, 256, 128]
         critic_hidden_dims = [512, 256, 128]
         priv_encoder_dims = [64, 20]
@@ -198,8 +198,8 @@ class GO1RoughCfgPPO( LeggedRobotCfgPPO ):
     class runner( LeggedRobotCfgPPO.runner ):
         policy_class_name = 'MYActorCritic'
         algorithm_class_name = 'MYPPO'
-        max_iterations = 800
-        run_name = 'RMA'
+        max_iterations = 5000
+        run_name = ''
         experiment_name = 'go1_climbsteps' # go1爬楼梯
 
          # Load and resume
@@ -208,12 +208,12 @@ class GO1RoughCfgPPO( LeggedRobotCfgPPO ):
         #checkpoint = '800'  # -1 = last saved model
         resume_path = None  # updated from load_run and chkpt
     
-    # 估计器的配置
-    class estimator:
-        train_with_estimated_states = True
-        learning_rate = 1.e-4
-        hidden_dims = [128, 64]
-        priv_states_dim = GO1RoughCfg.env.n_priv
-        num_prop = GO1RoughCfg.env.n_proprio
-        # num_scan = LeggedRobotCfg.env.n_scan
-        num_observations = GO1RoughCfg.env.num_observations
+    # # 估计器的配置
+    # class estimator:
+    #     train_with_estimated_states = True
+    #     learning_rate = 1.e-4
+    #     hidden_dims = [128, 64]
+    #     priv_states_dim = GO1RoughCfg.env.n_priv_latent
+    #     num_prop = GO1RoughCfg.env.n_proprio
+    #     # num_scan = LeggedRobotCfg.env.n_scan
+    #     num_observations = GO1RoughCfg.env.num_observations

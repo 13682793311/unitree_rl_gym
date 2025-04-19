@@ -55,7 +55,7 @@ class MYOnPolicyRunner:
         self.policy_cfg = train_cfg["policy"]
         
         # 加入了对线速度的估计器
-        self.estimator_cfg = train_cfg["estimator"]
+        #self.estimator_cfg = train_cfg["estimator"]
 
         self.device = device
         self.env = env
@@ -69,17 +69,17 @@ class MYOnPolicyRunner:
         # 创建actor-critic模型
         actor_critic_class = eval(self.cfg["policy_class_name"]) # ActorCritic
         actor_critic: MYActorCritic = actor_critic_class( self.env.cfg.env.n_proprio, #普通观测的值
-                                                          self.env.num_privileged_obs,   # 教师网络观测量
+                                                          self.env.cfg.env.n_scan,    #扫描观测的值
+                                                          num_critic_obs,   # 教师网络观测量
                                                           self.env.cfg.env.n_priv_latent,  # 优先观测量
-                                                          self.env.cfg.env.n_priv, # 速度编码器的输出
                                                           self.env.cfg.env.history_len, # 历史观测的长度
                                                           self.env.num_actions,
                                                         **self.policy_cfg).to(self.device)
         
         # 创建估计器,输入是普通观测，输出是线速度
-        estimator = MYEstimator(input_dim=self.env.cfg.env.n_proprio,      # 普通观测的维度
-                                output_dim=self.env.cfg.env.n_priv,        # 线速度的维度
-                                hidden_dims=self.estimator_cfg["hidden_dims"]).to(self.device)
+        # estimator = MYEstimator(input_dim=self.env.cfg.env.n_proprio,      # 普通观测的维度
+        #                         output_dim=self.env.cfg.env.n_priv,        # 线速度的维度
+        #                         hidden_dims=self.estimator_cfg["hidden_dims"]).to(self.device)
         
 
 
@@ -89,7 +89,7 @@ class MYOnPolicyRunner:
         # 创建PPO算法对象
         alg_class = eval(self.cfg["algorithm_class_name"]) # PPO
         # 在PPO对象中传入actor_critic和估计器
-        self.alg: MYPPO = alg_class(actor_critic, estimator, self.estimator_cfg, device=self.device, **self.alg_cfg)
+        self.alg: MYPPO = alg_class(actor_critic, device=self.device, **self.alg_cfg)
         
         # 每个环境在一次rollout中采集的步数和模型保存间隔
         self.num_steps_per_env = self.cfg["num_steps_per_env"]
@@ -181,7 +181,7 @@ class MYOnPolicyRunner:
                 self.alg.compute_returns(critic_obs)
             
             # 反向传播更新策略(加入了对估计器的更新)
-            mean_value_loss, mean_surrogate_loss, mean_estimator_loss = self.alg.update()
+            mean_value_loss, mean_surrogate_loss, mean_priv_reg_loss = self.alg.update()
             
             # 反向传播更新历史编码器
             if hist_encoding:
@@ -225,7 +225,7 @@ class MYOnPolicyRunner:
 
         self.writer.add_scalar('Loss/value_function', locs['mean_value_loss'], locs['it'])
         self.writer.add_scalar('Loss/surrogate', locs['mean_surrogate_loss'], locs['it'])
-        self.writer.add_scalar('Loss/estimator', locs['mean_estimator_loss'], locs['it'])
+        self.writer.add_scalar('Loss/priv_reg', locs['mean_priv_reg_loss'], locs['it'])
         self.writer.add_scalar('Loss/hist_latent', locs['mean_hist_latent_loss'], locs['it'])
         self.writer.add_scalar('Loss/learning_rate', self.alg.learning_rate, locs['it'])
         self.writer.add_scalar('Policy/mean_noise_std', mean_std.item(), locs['it'])
@@ -247,7 +247,7 @@ class MYOnPolicyRunner:
                             'collection_time']:.3f}s, learning {locs['learn_time']:.3f}s)\n"""
                           f"""{'Value function loss:':>{pad}} {locs['mean_value_loss']:.4f}\n"""
                           f"""{'Surrogate loss:':>{pad}} {locs['mean_surrogate_loss']:.4f}\n"""
-                          f"""{'Estimator loss:':>{pad}} {locs['mean_estimator_loss']:.4f}\n"""
+                          f"""{'Privileged reg loss:':>{pad}} {locs['mean_priv_reg_loss']:.4f}\n"""
                           f"""{'Hist latent loss:':>{pad}} {locs['mean_hist_latent_loss']:.4f}\n"""
                           f"""{'Mean action noise std:':>{pad}} {mean_std.item():.2f}\n"""
                           f"""{'Mean reward:':>{pad}} {statistics.mean(locs['rewbuffer']):.2f}\n"""
@@ -299,8 +299,8 @@ class MYOnPolicyRunner:
         return self.alg.actor_critic.act_inference
 
     # 获取估计器推理模式策略方法
-    def get_inference_estimator(self, device=None):
-        self.alg.estimator.eval() # switch to evaluation mode (dropout for example)
-        if device is not None:
-            self.alg.estimator.to(device)
-        return self.alg.estimator.inference
+    # def get_inference_estimator(self, device=None):
+    #     self.alg.estimator.eval() # switch to evaluation mode (dropout for example)
+    #     if device is not None:
+    #         self.alg.estimator.to(device)
+    #     return self.alg.estimator.inference

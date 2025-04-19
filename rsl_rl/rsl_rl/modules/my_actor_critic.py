@@ -87,54 +87,52 @@ class StateHistoryEncoder(nn.Module):
         output = self.linear_output(output)
         return output
 
-# 将历史观测编码器改为简单的前馈神经网络
+# 将历史观测编码器改为简单的前馈神经网络,使用历史编码器去估计优先观测和地形信息
 class StateHistoryMLP(nn.Module):
     def __init__(self,
                  activation,  
                  input_size,
                  tsteps,
                  output_size,
-                 hidden_dims=[256, 128, 64],
+                 hidden_dims=[256, 128],
                  tanh_encoder_output=False       
                  ):
         super(StateHistoryMLP, self).__init__()
 
-        self.input_dim = input_size
+        self.input_dim = input_size * tsteps
         self.output_dim = output_size
         self.tsteps = tsteps
-        activation = get_activation(activation)
+        self.activation = activation
         HistoryEncoder_layers = []
         HistoryEncoder_layers.append(nn.Linear(self.input_dim, hidden_dims[0]))
-        HistoryEncoder_layers.append(activation)
+        HistoryEncoder_layers.append(self.activation)
         for l in range(len(hidden_dims)):
             if l == len(hidden_dims) - 1:
                 HistoryEncoder_layers.append(nn.Linear(hidden_dims[l], self.output_dim))
             else:
                 HistoryEncoder_layers.append(nn.Linear(hidden_dims[l], hidden_dims[l + 1]))
-                HistoryEncoder_layers.append(activation)
+                HistoryEncoder_layers.append(self.activation)
         # estimator_layers.append(nn.Tanh())
         self.HistoryEncoder = nn.Sequential(* HistoryEncoder_layers)
         #print(f" HistoryEncoder: {self.HistoryEncoder}")
     
+    # 前向传播函数
     def forward(self, obs):
-        nd = obs.shape[0]
-        T = self.tsteps
-        return self.HistoryEncoder(obs.reshape([nd * T, -1]))
-    
-    def inference(self, input):
-        with torch.no_grad():
-            return self.HistoryEncoder(input)
+        obs = obs.view(obs.shape[0], -1)  # 将输入展平为一维
+        output = self.HistoryEncoder(obs)  # 通过全连接层进行前向传播
+        return output  # 返回输出结果
 
 
 
 # 改写actor类
 class Actor(nn.Module):
-    def __init__(self, num_prop, 
+    def __init__(self, num_prop,     
+                 num_scan,
                  num_actions, 
                  actor_hidden_dims,   # actor网络隐藏层的维度
                  priv_encoder_dims,   # 特权状态编码器的维度
+                 scan_encoder_dims,   # 地形特征编码器的维度
                  num_priv_latent,     # 潜在特征
-                 num_priv_explicit,   # 线速度
                  num_hist, activation, # 历史观测的维度
                  tanh_encoder_output=False) -> None:
         super().__init__()
@@ -144,8 +142,8 @@ class Actor(nn.Module):
         self.num_hist = num_hist
         self.num_actions = num_actions
         self.num_priv_latent = num_priv_latent   # 潜在特征
-        self.num_priv_explicit = num_priv_explicit # 线速度
-
+        self.if_scan_encode =  scan_encoder_dims is not None and num_scan >0
+        self.num_scan = num_scan
         # 构建特权状态编码器
         if len(priv_encoder_dims) > 0:
                     priv_encoder_layers = []
@@ -160,13 +158,32 @@ class Actor(nn.Module):
             self.priv_encoder = nn.Identity()
             priv_encoder_output_dim = num_priv_latent
 
-        self.history_encoder = StateHistoryEncoder(activation, num_prop, num_hist, priv_encoder_output_dim)
-        #self.history_encoder = StateHistoryMLP(activation, num_prop, num_hist, priv_encoder_output_dim)
+        # 构建地形特征编码器
+        if self.if_scan_encode:
+            scan_encoder = []
+            scan_encoder.append(nn.Linear(num_scan, scan_encoder_dims[0]))
+            scan_encoder.append(activation)
+            for l in range(len(scan_encoder_dims) - 1):
+                if l == len(scan_encoder_dims) - 2:
+                    scan_encoder.append(nn.Linear(scan_encoder_dims[l], scan_encoder_dims[l+1]))
+                    scan_encoder.append(nn.Tanh())
+                else:
+                    scan_encoder.append(nn.Linear(scan_encoder_dims[l], scan_encoder_dims[l + 1]))
+                    scan_encoder.append(activation)
+            self.scan_encoder = nn.Sequential(*scan_encoder)
+            self.scan_encoder_output_dim = scan_encoder_dims[-1]
+        else:
+            self.scan_encoder = nn.Identity()
+            self.scan_encoder_output_dim = num_scan
+            
+
+        #self.history_encoder = StateHistoryEncoder(activation, num_prop, num_hist, priv_encoder_output_dim)
+        self.history_encoder = StateHistoryMLP(activation, num_prop, num_hist, priv_encoder_output_dim + self.scan_encoder_output_dim)
 
         actor_layers = []
         actor_layers.append(nn.Linear(num_prop+
-                                      num_priv_explicit+
-                                      priv_encoder_output_dim, 
+                                      priv_encoder_output_dim+
+                                      self.scan_encoder_output_dim, 
                                       actor_hidden_dims[0]))  # 普通观测+扫描点编码向量+线速度+隐式观测编码向量
         actor_layers.append(activation)
         for l in range(len(actor_hidden_dims)):
@@ -180,36 +197,41 @@ class Actor(nn.Module):
         self.actor_backbone = nn.Sequential(*actor_layers)
 
     # 动作生成
-    def forward(self, obs, hist_encoding: bool, eval=False, scandots_latent=None):
-        if not eval:
-            obs_prop = obs[:, :self.num_prop]
-            obs_priv_explicit = obs[:, self.num_prop:self.num_prop + self.num_priv_explicit]
-            # 是否使用历史编码器
-            if hist_encoding:
-                latent = self.infer_hist_latent(obs)
+    def forward(self, obs, hist_encoding: bool, scandots_latent=None):
+        obs_prop = obs[:, :self.num_prop]
+        # 如果使用历史编码器，则直接输入
+        if hist_encoding:
+            latent = self.infer_hist_latent(obs)
+            # 将普通观测和历史预测拼接作为输入
+            backbone_input = torch.cat([obs_prop, latent], dim=1)
+        # 否则则将使用特权观测和地形信息
+        else: 
+            # 是否使用扫描点编码器
+            if self.if_scan_encode:
+                if scandots_latent is None:
+                    scan_latent = self.infer_scan_latent(obs)
+                else:
+                    scan_latent = scandots_latent
+                priv_latent = self.infer_priv_latent(obs)
+                backbone_input = torch.cat([obs_prop, priv_latent, scan_latent], dim=1) 
             else:
-                latent = self.infer_priv_latent(obs)
-            backbone_input = torch.cat([obs_prop, obs_priv_explicit, latent], dim=1)
-            backbone_output = self.actor_backbone(backbone_input)
-            return backbone_output
-        else:
-            obs_prop = obs[:, :self.num_prop]
-            obs_priv_explicit = obs[:, self.num_prop:self.num_prop + self.num_priv_explicit]
-            if hist_encoding:
-                latent = self.infer_hist_latent(obs)
-            else:
-                latent = self.infer_priv_latent(obs)
-            backbone_input = torch.cat([obs_prop, obs_priv_explicit, latent], dim=1)
-            backbone_output = self.actor_backbone(backbone_input)
-            return backbone_output
+                priv_latent = self.infer_priv_latent(obs)
+                backbone_input = torch.cat([obs_prop, priv_latent], dim=1)  
+        backbone_output = self.actor_backbone(backbone_input)        
+        return backbone_output
+        
     
     def infer_priv_latent(self, obs):
-        priv = obs[:, self.num_prop + self.num_priv_explicit: self.num_prop + self.num_priv_explicit + self.num_priv_latent]
+        priv = obs[:, self.num_prop : self.num_prop + self.num_priv_latent]
         return self.priv_encoder(priv)
     
+    def infer_scan_latent(self,obs):
+        scan = obs[:, self.num_prop + self.num_priv_latent : self.num_prop + self.num_priv_latent + self.num_scan]
+        return self.scan_encoder(scan)
+
     def infer_hist_latent(self, obs):
         hist = obs[:, -self.num_hist*self.num_prop:]
-        return self.history_encoder(hist.view(-1, self.num_hist, self.num_prop))
+        return self.history_encoder(hist)
     
 
 # 定义ActorCritic网络结构
@@ -217,11 +239,12 @@ class MYActorCritic(nn.Module):
     # 当前模型是否采用循环结构
     is_recurrent = False
     def __init__(self,  num_prop,
+                        num_scan,
                         num_critic_obs,
                         num_priv_latent, 
-                        num_priv_explicit,
                         num_hist,
                         num_actions,
+                        scan_encoder_dims= [256, 256, 256],
                         actor_hidden_dims=[256, 256, 256],
                         critic_hidden_dims=[256, 256, 256],
                         activation='elu',
@@ -237,7 +260,7 @@ class MYActorCritic(nn.Module):
         priv_encoder_dims= kwargs['priv_encoder_dims']
 
         # actor网络的构建
-        self.actor = Actor(num_prop, num_actions, actor_hidden_dims, priv_encoder_dims, num_priv_latent, num_priv_explicit, num_hist, activation, tanh_encoder_output=kwargs['tanh_encoder_output'])
+        self.actor = Actor(num_prop, num_scan, num_actions, actor_hidden_dims, priv_encoder_dims,scan_encoder_dims, num_priv_latent, num_hist, activation, tanh_encoder_output=kwargs['tanh_encoder_output'])
 
         # Value function
         # 定义critic网络结构
@@ -306,13 +329,9 @@ class MYActorCritic(nn.Module):
         return self.distribution.log_prob(actions).sum(dim=-1)
 
     # 在推理时直接返回actor网络的输出均值
-    def act_inference(self, observations,hist_encoding=False, eval=False):
-        if not eval: # 非训练模式
-            actions_mean = self.actor(observations)
-            return actions_mean
-        else:
-            actions_mean, latent_hist, latent_priv = self.actor(observations, hist_encoding, eval=True)
-            return actions_mean, latent_hist, latent_priv
+    def act_inference(self, observations,hist_encoding=False, scandots_latent=None):
+        actions_mean = self.actor(observations,hist_encoding,scandots_latent)
+        return actions_mean
 
 
     # 通过critic网络对输入进行评估，返回状态值
