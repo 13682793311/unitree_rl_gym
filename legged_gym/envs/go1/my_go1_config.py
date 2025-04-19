@@ -144,8 +144,8 @@ class GO1RoughCfg( LeggedRobotCfg ):
             tracking_ang_vel = 0.5
             lin_vel_z = -2.0
             ang_vel_xy = -0.05      # 惩罚基座在xy轴上的角速度
-            orientation = -0.2      # 保持基座水平
-            torques = -0.0002
+            orientation = -0.5      # 保持基座水平
+            torques = -0.0005
             dof_vel = -0.
             dof_acc = -2.0e-7
             base_height = -0.5 
