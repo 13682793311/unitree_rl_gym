@@ -117,7 +117,7 @@ class LeggedRobotCfg(BaseConfig):
             stand_still = -0.
             feet_slip = -0.
             foot_clearance = -0.
-            
+            smoothness = -0.
             ### 倒立相关奖励 ###
             handstand_feet_height_exp = 0.0
             handstand_feet_on_air = 0.0

@@ -138,8 +138,8 @@ class GO1RoughCfg( LeggedRobotCfg ):
     
     class rewards( LeggedRobotCfg.rewards ):
         soft_dof_pos_limit = 0.9
-        base_height_target = 0.34
-        clearance_height_target = -0.0
+        base_height_target = 0.30
+        clearance_height_target = -0.20
         only_positive_rewards = False
         class scales( LeggedRobotCfg.rewards.scales ):
             
@@ -148,19 +148,19 @@ class GO1RoughCfg( LeggedRobotCfg ):
             tracking_ang_vel = 0.5
             lin_vel_z = -2.0
             ang_vel_xy = -0.05      # 惩罚基座在xy轴上的角速度
-            orientation = -0.      # 保持基座水平
-            torques = -0.0002
+            orientation = -0.2      # 保持基座水平
+            torques = -0.0005
             dof_vel = -0.
-            dof_acc = -2.5e-7
-            base_height = -0. 
+            dof_acc = -2.0e-7
+            base_height = -0.5 
             feet_air_time =  0.
             collision = -1.
-            feet_stumble = -0.5       # 机器人绊脚
-            action_rate = -0.02      # 动作变化率
+            feet_stumble = -0.       # 机器人绊脚
+            action_rate = -0.01      # 动作变化率
             stand_still = -0       # 在没有命令的情况下保持静止
             feet_slip = -0.
-            foot_clearance = -0.
-    
+            foot_clearance = -0.005
+            smoothness = -0.005
     class normalization(LeggedRobotCfg.normalization):
         class obs_scales(LeggedRobotCfg.normalization.obs_scales):
             lin_vel = 2.0
