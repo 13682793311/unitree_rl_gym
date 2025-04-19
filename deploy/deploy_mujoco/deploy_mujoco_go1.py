@@ -79,7 +79,7 @@ if __name__ == "__main__":
         config = yaml.load(f, Loader=yaml.FullLoader)
         policy_path = config["policy_path"].replace("{LEGGED_GYM_ROOT_DIR}", LEGGED_GYM_ROOT_DIR)
         xml_path = config["xml_path"].replace("{LEGGED_GYM_ROOT_DIR}", LEGGED_GYM_ROOT_DIR)
-
+        estimator_path = config["estimator_path"].replace("{LEGGED_GYM_ROOT_DIR}", LEGGED_GYM_ROOT_DIR)
         simulation_duration = config["simulation_duration"]
         simulation_dt = config["simulation_dt"]
         control_decimation = config["control_decimation"]
@@ -127,7 +127,8 @@ if __name__ == "__main__":
 
     # load policy
     policy = torch.jit.load(policy_path)
-
+    # estimator
+    estimator = torch.jit.load(estimator_path)
     with mujoco.viewer.launch_passive(m, d) as viewer:
         # Close the viewer automatically after simulation_duration wall-seconds.
         start = time.time()
@@ -189,7 +190,11 @@ if __name__ == "__main__":
                 obs_tensor = torch.clamp(obs_tensor,-clip_observations,clip_observations)
                 # policy inference
                 # 推理得到动作
-                _action = policy(obs_tensor).detach().numpy().squeeze()
+                _latent =estimator(obs_tensor).detach()
+                # 将优先观测和普通观测拼接在一起
+                _input = torch.cat([_latent, obs_tensor], dim=-1)
+
+                _action = policy(_input).detach().numpy().squeeze()
                 
                 # 动作限幅
                 _action = np.clip(_action,-clip_actions,clip_actions)

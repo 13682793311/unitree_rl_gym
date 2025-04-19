@@ -1,7 +1,7 @@
 # 
 policy_path: "{LEGGED_GYM_ROOT_DIR}/logs/go1_climbsteps/exported/policies/policy_1.pt"
 xml_path: "{LEGGED_GYM_ROOT_DIR}/resources/robots/go1/scene.xml"
-
+estimator_path: "{LEGGED_GYM_ROOT_DIR}/logs/go1_climbsteps/exported/estimators/estimator.pt"
 # Total simulation time
 simulation_duration: 60.0
 # Simulation time step

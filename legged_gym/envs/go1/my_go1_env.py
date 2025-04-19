@@ -30,13 +30,13 @@ class Go1Robot(LeggedRobot):
         noise_scales = self.cfg.noise.noise_scales
         noise_level = self.cfg.noise.noise_level
         
-        noise_vec[:3] = noise_scales.lin_vel * noise_level * self.obs_scales.lin_vel
-        noise_vec[9:9+3] = noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel
-        noise_vec[3+9:6+9] = noise_scales.gravity * noise_level
-        noise_vec[6+9:9+9] = 0. # commands
-        noise_vec[9+9:9+self.num_actions+9] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos
-        noise_vec[9+self.num_actions+9:9+2*self.num_actions+9] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel
-        noise_vec[9+2*self.num_actions+9:9+3*self.num_actions+9] = 0. # previous actions
+        #noise_vec[:3] = noise_scales.lin_vel * noise_level * self.obs_scales.lin_vel
+        noise_vec[:3] = noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel
+        noise_vec[3:6] = noise_scales.gravity * noise_level
+        noise_vec[6:9] = 0. # commands
+        noise_vec[9:self.num_actions+9] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos
+        noise_vec[self.num_actions+9:2*self.num_actions+9] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel
+        noise_vec[9+2*self.num_actions:9+3*self.num_actions] = 0. # previous actions
         
         # noise_vec[:3] = noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel
         # noise_vec[3:6] = noise_scales.gravity * noise_level
@@ -72,7 +72,7 @@ class Go1Robot(LeggedRobot):
                                    0 * self.base_lin_vel), dim=-1)
         
         # 将普通观测和特权观测拼接在一起
-        self.obs_buf = torch.cat([priv_explicit,self.obs_buf], dim=-1)
+        # self.obs_buf = torch.cat([priv_explicit,self.obs_buf], dim=-1)
         
         # 在教师网络中加入高程图信息
         if self.cfg.terrain.measure_heights:

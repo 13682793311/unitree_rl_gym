@@ -30,7 +30,7 @@ class GO1RoughCfg( LeggedRobotCfg ):
         n_priv = 9  # 预估的线速度
         n_proprio = 45 # 普通观测
 
-        num_observations = n_priv+n_proprio  # 54
+        num_observations = n_proprio  # 54
         # 给actor的观测
         #num_observations = n_proprio + n_scan + history_len*n_proprio + n_priv_latent + n_priv #n_scan + n_proprio + n_priv #187 + 47 + 5 + 12 
         # 给critic的观测
@@ -133,9 +133,9 @@ class GO1RoughCfg( LeggedRobotCfg ):
         )
     
     class rewards( LeggedRobotCfg.rewards ):
-        soft_dof_pos_limit = 0.9
-        base_height_target = 0.34
-        clearance_height_target = -0.0
+        soft_dof_pos_limit = 1.
+        base_height_target = 0.30
+        clearance_height_target = -0.20
         only_positive_rewards = False
         class scales( LeggedRobotCfg.rewards.scales ):
             
@@ -144,18 +144,19 @@ class GO1RoughCfg( LeggedRobotCfg ):
             tracking_ang_vel = 0.5
             lin_vel_z = -2.0
             ang_vel_xy = -0.05      # 惩罚基座在xy轴上的角速度
-            orientation = -0.      # 保持基座水平
+            orientation = -0.2      # 保持基座水平
             torques = -0.0002
             dof_vel = -0.
-            dof_acc = -2.5e-7
-            base_height = -0. 
+            dof_acc = -2.0e-7
+            base_height = -0.5 
             feet_air_time =  0.
             collision = -1.
-            feet_stumble = -0.5       # 机器人绊脚
-            action_rate = -0.02      # 动作变化率
+            feet_stumble = -0.       # 机器人绊脚
+            action_rate = -0.01      # 动作变化率
             stand_still = -0       # 在没有命令的情况下保持静止
             feet_slip = -0.
-            foot_clearance = -0.
+            foot_clearance = -0.005
+            smoothness = -0.005
     
     class normalization(LeggedRobotCfg.normalization):
         class obs_scales(LeggedRobotCfg.normalization.obs_scales):
@@ -174,10 +175,10 @@ class GO1RoughCfgPPO( LeggedRobotCfgPPO ):
     class algorithm( LeggedRobotCfgPPO.algorithm ):
         entropy_coef = 0.01
     class runner( LeggedRobotCfgPPO.runner ):
-        policy_class_name = 'MYActorCritic'
-        algorithm_class_name = 'MYPPO'
-        max_iterations = 800
-        run_name = 'cmd_x_2'
+        policy_class_name = 'ActorCritic'
+        algorithm_class_name = 'PPO'
+        max_iterations = 3000
+        run_name = ''
         experiment_name = 'go1_climbsteps' # go1爬楼梯
 
          # Load and resume
@@ -188,7 +189,7 @@ class GO1RoughCfgPPO( LeggedRobotCfgPPO ):
     
     # 估计器的配置
     class estimator:
-        train_with_estimated_states = True
+        train_with_estimated_states = False
         learning_rate = 1.e-4
         hidden_dims = [128, 64]
         priv_states_dim = GO1RoughCfg.env.n_priv

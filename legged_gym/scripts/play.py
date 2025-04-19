@@ -78,7 +78,7 @@ def play(args):
     ppo_runner, train_cfg, _ = task_registry.make_alg_runner(env=env, name=args.task, args=args, train_cfg=train_cfg)
     policy = ppo_runner.get_inference_policy(device=env.device)
     # 获取估计器的模型
-    estimator = ppo_runner.get_inference_estimator(device=env.device)
+    #estimator = ppo_runner.get_inference_estimator(device=env.device)
     # export policy as a jit module (used to run it from C++)
     if EXPORT_POLICY:
         path = os.path.join(LEGGED_GYM_ROOT_DIR, 'logs', train_cfg.runner.experiment_name, 'exported', 'policies')
@@ -92,8 +92,8 @@ def play(args):
 
     # 加入实际线速度
     for i in range(10*int(env.max_episode_length)):
-        priv_latent = estimator(obs[:,9:45+9].detach())
-        obs[:,:9] = priv_latent
+        #priv_latent = estimator(obs[:,9:45+9].detach())
+        #obs[:,:9] = priv_latent
         actions = policy(obs.detach())
         if FIX_COMMAND:
             env.commands[:, 0] = 0.5    # 1.0
@@ -109,7 +109,7 @@ def play(args):
 
 if __name__ == '__main__':
     EXPORT_POLICY = True
-    EXPORT_ESTIMATOR = True
+    EXPORT_ESTIMATOR = False
     RECORD_FRAMES = False
     MOVE_CAMERA = False
     FIX_COMMAND = False # whether to use joystick to control the robot
