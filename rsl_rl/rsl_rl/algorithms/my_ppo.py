@@ -84,7 +84,7 @@ class MYPPO:
 
         # 历史编码器的配置
         self.hist_encoder_optimizer = optim.Adam(self.actor_critic.actor.history_encoder.parameters(), lr=learning_rate)
-        # self.priv_reg_coef_schedual = priv_reg_coef_schedual
+        self.priv_reg_coef_schedual = priv_reg_coef_schedual
         self.counter = 0
 
     def init_storage(self, num_envs, num_transitions_per_env, actor_obs_shape, critic_obs_shape, action_shape):
@@ -171,9 +171,10 @@ class MYPPO:
                     hist_latent_batch = self.actor_critic.actor.infer_hist_latent(obs_batch)
                 latent_batch = torch.cat((scan_latent_batch, priv_latent_batch), dim=1)
                 
+                # 更新特权编码器，历史编码器不需要更新
                 priv_reg_loss = (latent_batch - hist_latent_batch.detach()).norm(p=2, dim=1).mean()
-                # priv_reg_stage = min(max((self.counter - self.priv_reg_coef_schedual[2]), 0) / self.priv_reg_coef_schedual[3], 1)
-                # priv_reg_coef = priv_reg_stage * (self.priv_reg_coef_schedual[1] - self.priv_reg_coef_schedual[0]) + self.priv_reg_coef_schedual[0]
+                priv_reg_stage = min(max((self.counter - self.priv_reg_coef_schedual[2]), 0) / self.priv_reg_coef_schedual[3], 1)
+                priv_reg_coef = priv_reg_stage * (self.priv_reg_coef_schedual[1] - self.priv_reg_coef_schedual[0]) + self.priv_reg_coef_schedual[0]
 
 
                 
@@ -210,7 +211,8 @@ class MYPPO:
                 else:
                     value_loss = (returns_batch - value_batch).pow(2).mean()
 
-                loss = surrogate_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy_batch.mean()
+                # 将特权观测器的损失添加到总损失中
+                loss = surrogate_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy_batch.mean() + priv_reg_loss * priv_reg_coef
 
                 # Gradient step，梯度更新
                 self.optimizer.zero_grad()
