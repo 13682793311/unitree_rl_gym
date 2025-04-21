@@ -164,7 +164,7 @@ class MYPPO:
                 sigma_batch = self.actor_critic.action_std
                 entropy_batch = self.actor_critic.entropy
 
-                # 历史观测器
+                # adaptation module update
                 priv_latent_batch = self.actor_critic.actor.infer_priv_latent(obs_batch)
                 scan_latent_batch = self.actor_critic.actor.infer_scan_latent(obs_batch)
                 with torch.inference_mode():
@@ -201,7 +201,7 @@ class MYPPO:
                                                                                 1.0 + self.clip_param)
                 surrogate_loss = torch.max(surrogate, surrogate_clipped).mean()
 
-                # Value function loss，总损失计算
+                # Value function loss
                 if self.use_clipped_value_loss:
                     value_clipped = target_values_batch + (value_batch - target_values_batch).clamp(-self.clip_param,
                                                                                                     self.clip_param)

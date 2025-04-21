@@ -142,8 +142,6 @@ class Actor(nn.Module):
         self.num_hist = num_hist
         self.num_actions = num_actions
         self.num_priv_latent = num_priv_latent   # 潜在特征
-        self.if_scan_encode =  scan_encoder_dims is not None and num_scan >0
-        #self.if_scan_encode =  scan_encoder_dims is not None
         self.num_scan = num_scan
         # 构建特权状态编码器
         if len(priv_encoder_dims) > 0:
@@ -198,7 +196,7 @@ class Actor(nn.Module):
         self.actor_backbone = nn.Sequential(*actor_layers)
 
     # 动作生成
-    def forward(self, obs, hist_encoding: bool, scandots_latent=None):
+    def forward(self, obs, hist_encoding: bool):
         obs_prop = obs[:, :self.num_prop]
         # 如果使用历史编码器，则直接输入
         if hist_encoding:
@@ -207,19 +205,10 @@ class Actor(nn.Module):
             backbone_input = torch.cat([obs_prop, latent], dim=1)
         # 否则将使用特权观测和地形信息
         else: 
-            # 是否使用扫描点编码器
-            if self.if_scan_encode:
-                if scandots_latent is None:
-                    scan_latent = self.infer_scan_latent(obs)
-                else:
-                    scan_latent = scandots_latent
-                priv_latent = self.infer_priv_latent(obs)
-                backbone_input = torch.cat([obs_prop, priv_latent, scan_latent], dim=1) 
-            else:
-                scan_latent = torch.zeros(obs.shape[0], self.num_scan, device=obs.device)
-                priv_latent = self.infer_priv_latent(obs)
-                scan_latent = torch.zeros(obs.shape[0], self.num_scan, device=obs.device)  # 确保维度匹配
-                backbone_input = torch.cat([obs_prop, priv_latent, scan_latent], dim=1)  
+            scan_latent = self.infer_scan_latent(obs)
+            priv_latent = self.infer_priv_latent(obs)
+            backbone_input = torch.cat([obs_prop, priv_latent, scan_latent], dim=1) 
+            
         backbone_output = self.actor_backbone(backbone_input)        
         return backbone_output
         
@@ -332,13 +321,10 @@ class MYActorCritic(nn.Module):
         return self.distribution.log_prob(actions).sum(dim=-1)
 
     # 在推理时直接返回actor网络的输出均值
-    def act_inference(self, observations,hist_encoding=False, scandots_latent=None):
-        if not eval:
-            actions_mean = self.actor(observations,hist_encoding,scandots_latent)
-            return actions_mean
-        else:
-            actions_mean, latent_history, latent_priv = self.actor(observations,hist_encoding,scandots_latent)
-            return actions_mean
+    def act_inference(self, observations,hist_encoding=False):
+        actions_mean = self.actor(observations,hist_encoding)
+        return actions_mean
+        
 
 
     # 通过critic网络对输入进行评估，返回状态值

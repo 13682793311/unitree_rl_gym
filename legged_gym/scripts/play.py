@@ -88,8 +88,8 @@ def play(args):
     
     for i in range(10*int(env.max_episode_length)):
         # 进行切片,只输入历史信息和当前状态
-        proprio_obs = obs[:,:env_cfg.n_proprio]
-        hist_obs = obs[:, -env_cfg.num_hist*env_cfg.num_prop:]
+        # proprio_obs = obs[:,:env_cfg.n_proprio]
+        # hist_obs = obs[:, -env_cfg.num_hist*env_cfg.num_prop:]
         actions = policy(obs.detach(), hist_encoding = True)
         if FIX_COMMAND:
             env.commands[:, 0] = 0.5    # 1.0

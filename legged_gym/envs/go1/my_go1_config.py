@@ -144,23 +144,23 @@ class GO1RoughCfg( LeggedRobotCfg ):
         class scales( LeggedRobotCfg.rewards.scales ):
             
             termination = -0.0
-            tracking_lin_vel = 1.0  # 1.0
+            tracking_lin_vel = 1.0  
             tracking_ang_vel = 0.5
             lin_vel_z = -2.0
-            ang_vel_xy = -0.05      # 惩罚基座在xy轴上的角速度
-            orientation = -0.2      # 保持基座水平
-            torques = -0.0005
+            ang_vel_xy = -0.05     
+            orientation = -0.      
+            torques = -0.0002
             dof_vel = -0.
-            dof_acc = -2.0e-7
-            base_height = -0.5 
-            feet_air_time =  0.
+            dof_acc = -2.5e-7
+            base_height = -0.5      # 增加高度
+            feet_air_time =  1.
             collision = -1.
-            feet_stumble = -0.       # 机器人绊脚
-            action_rate = -0.01      # 动作变化率
-            stand_still = -0       # 在没有命令的情况下保持静止
+            feet_stumble = -0.       
+            action_rate = -0.01      
+            stand_still = -0       
             feet_slip = -0.
-            foot_clearance = -0.005
-            smoothness = -0.005
+            foot_clearance = -0.
+            smoothness = -0.
     class normalization(LeggedRobotCfg.normalization):
         class obs_scales(LeggedRobotCfg.normalization.obs_scales):
             lin_vel = 2.0
@@ -199,7 +199,7 @@ class GO1RoughCfgPPO( LeggedRobotCfgPPO ):
         policy_class_name = 'MYActorCritic'
         algorithm_class_name = 'MYPPO'
         max_iterations = 5000
-        run_name = ''
+        run_name = 'base_height'
         experiment_name = 'go1_climbsteps' # go1爬楼梯
 
          # Load and resume
