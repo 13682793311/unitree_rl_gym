@@ -54,9 +54,6 @@ class MYOnPolicyRunner:
         self.alg_cfg = train_cfg["algorithm"]
         self.policy_cfg = train_cfg["policy"]
         
-        # 加入了对线速度的估计器
-        #self.estimator_cfg = train_cfg["estimator"]
-
         self.device = device
         self.env = env
         
@@ -76,19 +73,9 @@ class MYOnPolicyRunner:
                                                           self.env.num_actions,
                                                         **self.policy_cfg).to(self.device)
         
-        # 创建估计器,输入是普通观测，输出是线速度
-        # estimator = MYEstimator(input_dim=self.env.cfg.env.n_proprio,      # 普通观测的维度
-        #                         output_dim=self.env.cfg.env.n_priv,        # 线速度的维度
-        #                         hidden_dims=self.estimator_cfg["hidden_dims"]).to(self.device)
-        
-
-
-
-
-
         # 创建PPO算法对象
         alg_class = eval(self.cfg["algorithm_class_name"]) # PPO
-        # 在PPO对象中传入actor_critic和估计器
+        # 在PPO对象中传入actor_critic
         self.alg: MYPPO = alg_class(actor_critic, device=self.device, **self.alg_cfg)
         
         # 每个环境在一次rollout中采集的步数和模型保存间隔
@@ -146,12 +133,14 @@ class MYOnPolicyRunner:
         # 对每个训练迭代num_learning_iterations次
         for it in range(self.current_learning_iteration, tot_iter):
             start = time.time()
+            # 通过hist_encoding来判断当前阶段
             hist_encoding = it % self.dagger_update_freq == 0
             # Rollout
             # 用于在进行模型推理是禁用梯度计算
             with torch.inference_mode():
                 for i in range(self.num_steps_per_env):
-                    # 使用当前策略对每个环境生成动作
+                    # 第一个阶段使用特权编码器和地形编码器
+                    # 第二个阶段使用历史编码器
                     actions = self.alg.act(obs, critic_obs,infos,hist_encoding)
                     # 将动作传入一步，并获取下一个观察、奖励、终止标志和信息
                     obs, privileged_obs, rewards, dones, infos = self.env.step(actions)
@@ -183,7 +172,7 @@ class MYOnPolicyRunner:
             # 反向传播更新策略(加入了对估计器的更新)
             mean_value_loss, mean_surrogate_loss, mean_priv_reg_loss = self.alg.update()
             
-            # 反向传播更新历史编码器
+            # 历史编码器的反向传播
             if hist_encoding:
                 print("Updating dagger...")
                 mean_hist_latent_loss = self.alg.update_dagger()
@@ -297,10 +286,3 @@ class MYOnPolicyRunner:
         if device is not None:
             self.alg.actor_critic.to(device)
         return self.alg.actor_critic.act_inference
-
-    # 获取估计器推理模式策略方法
-    # def get_inference_estimator(self, device=None):
-    #     self.alg.estimator.eval() # switch to evaluation mode (dropout for example)
-    #     if device is not None:
-    #         self.alg.estimator.to(device)
-    #     return self.alg.estimator.inference

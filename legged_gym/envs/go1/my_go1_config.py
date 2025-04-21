@@ -2,7 +2,7 @@ from legged_gym.envs.base.legged_robot_config import LeggedRobotCfg, LeggedRobot
 import numpy as np
 class GO1RoughCfg( LeggedRobotCfg ):
     class init_state( LeggedRobotCfg.init_state ):
-        pos = [0.0, 0.0, 0.34] # x,y,z [m]
+        pos = [0.0, 0.0, 0.42] # x,y,z [m]
         default_joint_angles = { # = target angles [rad] when action = 0.0
             'FL_hip_joint': 0.1,   # [rad]
             'RL_hip_joint': 0.1,   # [rad]
@@ -21,7 +21,7 @@ class GO1RoughCfg( LeggedRobotCfg ):
         }
 
     class env(LeggedRobotCfg.env):
-        num_envs = 2048 # 4096
+        num_envs = 4096 # 4096
         
         # num_privileged_obs = 235    # 48+11*17=235
         
@@ -138,7 +138,7 @@ class GO1RoughCfg( LeggedRobotCfg ):
     
     class rewards( LeggedRobotCfg.rewards ):
         soft_dof_pos_limit = 0.9
-        base_height_target = 0.30
+        base_height_target = 0.24
         clearance_height_target = -0.20
         only_positive_rewards = False
         class scales( LeggedRobotCfg.rewards.scales ):
@@ -152,7 +152,7 @@ class GO1RoughCfg( LeggedRobotCfg ):
             torques = -0.0002
             dof_vel = -0.
             dof_acc = -2.5e-7
-            base_height = -0.5      # 增加高度
+            base_height = -0.05      # 增加高度
             feet_air_time =  1.
             collision = -1.
             feet_stumble = -0.       
@@ -178,10 +178,10 @@ class GO1RoughCfgPPO( LeggedRobotCfgPPO ):
     class policy:
         init_noise_std = 1.0
         continue_from_last_std = True
-        scan_encoder_dims = [128, 64, 32]
+        scan_encoder_dims = [16, 8]  # 128，64，32
         actor_hidden_dims = [512, 256, 128]
         critic_hidden_dims = [512, 256, 128]
-        priv_encoder_dims = [64, 20]
+        priv_encoder_dims = [16, 8]  # 64，20
         activation = 'elu' # can be elu, relu, selu, crelu, lrelu, tanh, sigmoid
         # only for 'ActorCriticRecurrent':
         rnn_type = 'lstm'
@@ -198,14 +198,14 @@ class GO1RoughCfgPPO( LeggedRobotCfgPPO ):
     class runner( LeggedRobotCfgPPO.runner ):
         policy_class_name = 'MYActorCritic'
         algorithm_class_name = 'MYPPO'
-        max_iterations = 5000
+        max_iterations = 2000
         run_name = 'base_height'
         experiment_name = 'go1_climbsteps' # go1爬楼梯
 
          # Load and resume
         resume = False # 断点重训
-        #load_run = '/home/kami/unitree_rl_dataset/unitree_rl_gym/logs/go1_climbsteps/Apr15_16-58-17_cmd_x_2' # -1 = last run 
-        #checkpoint = '800'  # -1 = last saved model
+        load_run = '/home/kami/unitree_rl_dataset/unitree_rl_gym/logs/go1_climbsteps/Apr21_21-48-52_base_height' # -1 = last run 
+        checkpoint = '800'  # -1 = last saved model
         resume_path = None  # updated from load_run and chkpt
     
     # # 估计器的配置

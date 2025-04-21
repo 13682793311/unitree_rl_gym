@@ -139,7 +139,7 @@ class MYPPO:
         last_values= self.actor_critic.evaluate(last_critic_obs).detach()
         self.storage.compute_returns(last_values, self.gamma, self.lam)
     
-    # 策略更新
+    # phase 1 update
     def update(self):
         # 初始化平均损失
         mean_value_loss = 0
@@ -229,10 +229,11 @@ class MYPPO:
         mean_surrogate_loss /= num_updates
         mean_priv_reg_loss /= num_updates
         self.storage.clear()
-
+        # 这里没更新counter
+        self.update_counter()
         return mean_value_loss, mean_surrogate_loss, mean_priv_reg_loss
     
-    # 历史编码器更新
+    # phase 2 update
     def update_dagger(self):
         mean_hist_latent_loss = 0
         if self.actor_critic.is_recurrent:
@@ -241,6 +242,7 @@ class MYPPO:
             generator = self.storage.mini_batch_generator(self.num_mini_batches, self.num_learning_epochs)
         for obs_batch, critic_obs_batch, actions_batch, target_values_batch, advantages_batch, returns_batch, old_actions_log_prob_batch, \
             old_mu_batch, old_sigma_batch, hid_states_batch, masks_batch in generator:
+                # phase2
                 with torch.inference_mode():
                     self.actor_critic.act(obs_batch, hist_encoding=True, masks=masks_batch, hidden_states=hid_states_batch[0])
 
@@ -250,6 +252,7 @@ class MYPPO:
                     scan_latent_batch = self.actor_critic.actor.infer_scan_latent(obs_batch)
                 hist_latent_batch = self.actor_critic.actor.infer_hist_latent(obs_batch)
                 latent_batch = torch.cat((scan_latent_batch, priv_latent_batch), dim=1)
+                # 回归损失
                 hist_latent_loss = (latent_batch.detach() - hist_latent_batch).norm(p=2, dim=1).mean()
                 self.hist_encoder_optimizer.zero_grad()
                 hist_latent_loss.backward()
@@ -257,6 +260,7 @@ class MYPPO:
                 self.hist_encoder_optimizer.step()
                 
                 mean_hist_latent_loss += hist_latent_loss.item()
+
         num_updates = self.num_learning_epochs * self.num_mini_batches
         mean_hist_latent_loss /= num_updates
         self.storage.clear()

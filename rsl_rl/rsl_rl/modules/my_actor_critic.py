@@ -35,58 +35,6 @@ import torch.nn as nn  # torch的神经网络模块nn，用于构建深度神经
 from torch.distributions import Normal
 from torch.nn.modules import rnn
 
-# 加入历史观测编码器
-class StateHistoryEncoder(nn.Module):
-    def __init__(self, activation_fn, input_size, tsteps, output_size, tanh_encoder_output=False):
-        # self.device = device
-        super(StateHistoryEncoder, self).__init__()
-        self.activation_fn = activation_fn
-        self.tsteps = tsteps     # 历史时间步的数量
-
-        channel_size = 10
-        # last_activation = nn.ELU()
-
-        # 全连接层
-        self.encoder = nn.Sequential(
-                nn.Linear(input_size, 3 * channel_size), self.activation_fn,
-                )   # 输入为状态信息，输出为3 * channel_size维的向量
-
-        # 根据时间步的不同，选择不同的卷积层结构
-        # 使用一维卷积层处理时间序列数据
-        if tsteps == 50:
-            self.conv_layers = nn.Sequential(
-                    nn.Conv1d(in_channels = 3 * channel_size, out_channels = 2 * channel_size, kernel_size = 8, stride = 4), self.activation_fn,
-                    nn.Conv1d(in_channels = 2 * channel_size, out_channels = channel_size, kernel_size = 5, stride = 1), self.activation_fn,
-                    nn.Conv1d(in_channels = channel_size, out_channels = channel_size, kernel_size = 5, stride = 1), self.activation_fn, nn.Flatten())
-        elif tsteps == 10:
-            self.conv_layers = nn.Sequential(
-                nn.Conv1d(in_channels = 3 * channel_size, out_channels = 2 * channel_size, kernel_size = 4, stride = 2), self.activation_fn,
-                nn.Conv1d(in_channels = 2 * channel_size, out_channels = channel_size, kernel_size = 2, stride = 1), self.activation_fn,
-                nn.Flatten())
-        elif tsteps == 20:
-            self.conv_layers = nn.Sequential(
-                nn.Conv1d(in_channels = 3 * channel_size, out_channels = 2 * channel_size, kernel_size = 6, stride = 2), self.activation_fn,
-                nn.Conv1d(in_channels = 2 * channel_size, out_channels = channel_size, kernel_size = 4, stride = 2), self.activation_fn,
-                nn.Flatten())
-        else:
-            raise(ValueError("tsteps must be 10, 20 or 50"))
-        # 最终输出层
-        self.linear_output = nn.Sequential(
-                nn.Linear(channel_size * 3, output_size), self.activation_fn
-                )
-
-    # 前向传播
-    def forward(self, obs):
-        # nd * T * n_proprio
-        nd = obs.shape[0]
-        T = self.tsteps
-        # print("obs device", obs.device)
-        # print("encoder device", next(self.encoder.parameters()).device)
-        projection = self.encoder(obs.reshape([nd * T, -1])) # do projection for n_proprio -> 32
-        output = self.conv_layers(projection.reshape([nd, T, -1]).permute((0, 2, 1)))
-        output = self.linear_output(output)
-        return output
-
 # 将历史观测编码器改为简单的前馈神经网络,使用历史编码器去估计优先观测和地形信息
 class StateHistoryMLP(nn.Module):
     def __init__(self,
@@ -94,7 +42,7 @@ class StateHistoryMLP(nn.Module):
                  input_size,
                  tsteps,
                  output_size,
-                 hidden_dims=[256, 128],
+                 hidden_dims=[64, 32],    # 256, 128
                  tanh_encoder_output=False       
                  ):
         super(StateHistoryMLP, self).__init__()
@@ -112,7 +60,6 @@ class StateHistoryMLP(nn.Module):
             else:
                 HistoryEncoder_layers.append(nn.Linear(hidden_dims[l], hidden_dims[l + 1]))
                 HistoryEncoder_layers.append(self.activation)
-        # estimator_layers.append(nn.Tanh())
         self.HistoryEncoder = nn.Sequential(* HistoryEncoder_layers)
         #print(f" HistoryEncoder: {self.HistoryEncoder}")
     
@@ -143,6 +90,7 @@ class Actor(nn.Module):
         self.num_actions = num_actions
         self.num_priv_latent = num_priv_latent   # 潜在特征
         self.num_scan = num_scan
+        ########################## Env Factor Encoder ##########################
         # 构建特权状态编码器
         if len(priv_encoder_dims) > 0:
             priv_encoder_layers = []
@@ -163,22 +111,18 @@ class Actor(nn.Module):
             scan_encoder.append(nn.Linear(num_scan, scan_encoder_dims[0]))
             scan_encoder.append(activation)
             for l in range(len(scan_encoder_dims) - 1):
-                if l == len(scan_encoder_dims) - 2:
-                    scan_encoder.append(nn.Linear(scan_encoder_dims[l], scan_encoder_dims[l+1]))
-                    scan_encoder.append(nn.Tanh())
-                else:
-                    scan_encoder.append(nn.Linear(scan_encoder_dims[l], scan_encoder_dims[l + 1]))
-                    scan_encoder.append(activation)
+                scan_encoder.append(nn.Linear(scan_encoder_dims[l], scan_encoder_dims[l + 1]))
+                scan_encoder.append(activation)
             self.scan_encoder = nn.Sequential(*scan_encoder)
             scan_encoder_output_dim = scan_encoder_dims[-1]
         else:
             self.scan_encoder = nn.Identity()
             scan_encoder_output_dim = num_scan
             
-
-        #self.history_encoder = StateHistoryEncoder(activation, num_prop, num_hist, priv_encoder_output_dim)
+        ########################### Adaptation Module ###########################
         self.history_encoder = StateHistoryMLP(activation, num_prop, num_hist, priv_encoder_output_dim + scan_encoder_output_dim)
 
+        ########################### Base_policy ############################
         actor_layers = []
         actor_layers.append(nn.Linear(num_prop+
                                       priv_encoder_output_dim+
@@ -198,12 +142,12 @@ class Actor(nn.Module):
     # 动作生成
     def forward(self, obs, hist_encoding: bool):
         obs_prop = obs[:, :self.num_prop]
-        # 如果使用历史编码器，则直接输入
+        # phase 2
         if hist_encoding:
             latent = self.infer_hist_latent(obs)
             # 将普通观测和历史预测拼接作为输入
             backbone_input = torch.cat([obs_prop, latent], dim=1)
-        # 否则将使用特权观测和地形信息
+        # phase 1
         else: 
             scan_latent = self.infer_scan_latent(obs)
             priv_latent = self.infer_priv_latent(obs)

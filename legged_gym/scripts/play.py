@@ -85,7 +85,7 @@ def play(args):
         export_policy_as_jit(ppo_runner.alg.actor_critic, path)
         print('Exported policy as jit script to: ', path)
 
-    
+    # 按照频率来进行策略的执行
     for i in range(10*int(env.max_episode_length)):
         # 进行切片,只输入历史信息和当前状态
         # proprio_obs = obs[:,:env_cfg.n_proprio]
