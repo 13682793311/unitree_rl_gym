@@ -144,10 +144,8 @@ class MYPPO:
         # 初始化平均损失
         mean_value_loss = 0
         mean_surrogate_loss = 0
-        # 计算估计器的损失
-        mean_estimator_loss = 0
-        # 历史编码器的损失
-        mean_priv_reg_loss = 0
+        # 环境编码器的回归损失
+        mean_env_reg_loss = 0
         # 选择生成器
         if self.actor_critic.is_recurrent:
             generator = self.storage.reccurent_mini_batch_generator(self.num_mini_batches, self.num_learning_epochs)
@@ -165,14 +163,12 @@ class MYPPO:
                 entropy_batch = self.actor_critic.entropy
 
                 # adaptation module update
-                priv_latent_batch = self.actor_critic.actor.infer_priv_latent(obs_batch)
-                scan_latent_batch = self.actor_critic.actor.infer_scan_latent(obs_batch)
+                env_latent_batch = self.actor_critic.actor.infer_env_latent(obs_batch)
                 with torch.inference_mode():
                     hist_latent_batch = self.actor_critic.actor.infer_hist_latent(obs_batch)
-                latent_batch = torch.cat((scan_latent_batch, priv_latent_batch), dim=1)
                 
                 # 更新特权编码器，历史编码器不需要更新
-                priv_reg_loss = (latent_batch - hist_latent_batch.detach()).norm(p=2, dim=1).mean()
+                env_reg_loss = (env_latent_batch - hist_latent_batch.detach()).norm(p=2, dim=1).mean()
                 priv_reg_stage = min(max((self.counter - self.priv_reg_coef_schedual[2]), 0) / self.priv_reg_coef_schedual[3], 1)
                 priv_reg_coef = priv_reg_stage * (self.priv_reg_coef_schedual[1] - self.priv_reg_coef_schedual[0]) + self.priv_reg_coef_schedual[0]
 
@@ -212,7 +208,7 @@ class MYPPO:
                     value_loss = (returns_batch - value_batch).pow(2).mean()
 
                 # 将特权观测器的损失添加到总损失中
-                loss = surrogate_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy_batch.mean() + priv_reg_loss * priv_reg_coef
+                loss = surrogate_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy_batch.mean() + env_reg_loss * priv_reg_coef
 
                 # Gradient step，梯度更新
                 self.optimizer.zero_grad()
@@ -222,19 +218,19 @@ class MYPPO:
                 # 平均损失记录
                 mean_value_loss += value_loss.item()
                 mean_surrogate_loss += surrogate_loss.item()
-                mean_priv_reg_loss += priv_reg_loss.item()
+                mean_env_reg_loss += env_reg_loss.item()
 
         num_updates = self.num_learning_epochs * self.num_mini_batches
         mean_value_loss /= num_updates
         mean_surrogate_loss /= num_updates
-        mean_priv_reg_loss /= num_updates
+        mean_env_reg_loss /= num_updates
         self.storage.clear()
-        # 这里没更新counter
         self.update_counter()
-        return mean_value_loss, mean_surrogate_loss, mean_priv_reg_loss
+        return mean_value_loss, mean_surrogate_loss, mean_env_reg_loss
     
     # phase 2 update
     def update_dagger(self):
+        # 历史编码器的回归损失
         mean_hist_latent_loss = 0
         if self.actor_critic.is_recurrent:
             generator = self.storage.reccurent_mini_batch_generator(self.num_mini_batches, self.num_learning_epochs)
@@ -248,12 +244,10 @@ class MYPPO:
 
                 # Adaptation module update
                 with torch.inference_mode():
-                    priv_latent_batch = self.actor_critic.actor.infer_priv_latent(obs_batch)
-                    scan_latent_batch = self.actor_critic.actor.infer_scan_latent(obs_batch)
+                    env_latent_batch = self.actor_critic.actor.infer_env_latent(obs_batch)
                 hist_latent_batch = self.actor_critic.actor.infer_hist_latent(obs_batch)
-                latent_batch = torch.cat((scan_latent_batch, priv_latent_batch), dim=1)
                 # 回归损失
-                hist_latent_loss = (latent_batch.detach() - hist_latent_batch).norm(p=2, dim=1).mean()
+                hist_latent_loss = (env_latent_batch.detach() - hist_latent_batch).norm(p=2, dim=1).mean()
                 self.hist_encoder_optimizer.zero_grad()
                 hist_latent_loss.backward()
                 nn.utils.clip_grad_norm_(self.actor_critic.actor.history_encoder.parameters(), self.max_grad_norm)

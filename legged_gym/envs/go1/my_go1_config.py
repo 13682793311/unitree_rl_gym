@@ -182,6 +182,8 @@ class GO1RoughCfgPPO( LeggedRobotCfgPPO ):
         actor_hidden_dims = [512, 256, 128]
         critic_hidden_dims = [512, 256, 128]
         priv_encoder_dims = [16, 8]  # 64，20
+
+        env_encoder_dims = [16, 3,4]  # 128，64，32
         activation = 'elu' # can be elu, relu, selu, crelu, lrelu, tanh, sigmoid
         # only for 'ActorCriticRecurrent':
         rnn_type = 'lstm'
@@ -204,8 +206,8 @@ class GO1RoughCfgPPO( LeggedRobotCfgPPO ):
 
          # Load and resume
         resume = False # 断点重训
-        load_run = '/home/kami/unitree_rl_dataset/unitree_rl_gym/logs/go1_climbsteps/Apr21_21-48-52_base_height' # -1 = last run 
-        checkpoint = '800'  # -1 = last saved model
+        #load_run = '/home/kami/unitree_rl_dataset/unitree_rl_gym/logs/go1_climbsteps/Apr21_21-48-52_base_height' # -1 = last run 
+        #checkpoint = '800'  # -1 = last saved model
         resume_path = None  # updated from load_run and chkpt
     
     # # 估计器的配置

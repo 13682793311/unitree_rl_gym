@@ -71,15 +71,14 @@ class StateHistoryMLP(nn.Module):
 
 
 
-# 改写actor类
+# 简化actor的网络结构
 class Actor(nn.Module):
     def __init__(self, num_prop,     
                  num_scan,
                  num_actions, 
                  actor_hidden_dims,   # actor网络隐藏层的维度
-                 priv_encoder_dims,   # 特权状态编码器的维度
-                 scan_encoder_dims,   # 地形特征编码器的维度
-                 num_priv_latent,     # 潜在特征
+                 env_encoder_dims,   # 环境特征编码器的维度
+                 num_priv_latent,     # 潜在特征的数量
                  num_hist, activation, # 历史观测的维度
                  tanh_encoder_output=False) -> None:
         super().__init__()
@@ -91,43 +90,28 @@ class Actor(nn.Module):
         self.num_priv_latent = num_priv_latent   # 潜在特征
         self.num_scan = num_scan
         ########################## Env Factor Encoder ##########################
-        # 构建特权状态编码器
-        if len(priv_encoder_dims) > 0:
-            priv_encoder_layers = []
-            priv_encoder_layers.append(nn.Linear(num_priv_latent, priv_encoder_dims[0]))
-            priv_encoder_layers.append(activation)
-            for l in range(len(priv_encoder_dims) - 1):
-                priv_encoder_layers.append(nn.Linear(priv_encoder_dims[l], priv_encoder_dims[l + 1]))
-                priv_encoder_layers.append(activation)
-            self.priv_encoder = nn.Sequential(*priv_encoder_layers)
-            priv_encoder_output_dim = priv_encoder_dims[-1]
+        # 构建环境编码器
+        if len(env_encoder_dims) > 0:
+            env_encoder_layers = []
+            env_encoder_layers.append(nn.Linear(num_priv_latent+num_scan, env_encoder_dims[0])) # 输入维度为num_priv_latent+num_scan
+            env_encoder_layers.append(activation)
+            for l in range(len(env_encoder_dims) - 1):
+                env_encoder_layers.append(nn.Linear(env_encoder_dims[l], env_encoder_dims[l + 1]))
+                env_encoder_layers.append(activation)
+            self.env_encoder = nn.Sequential(*env_encoder_layers)
+            env_encoder_output_dim = env_encoder_dims[-1]
         else:
-            self.priv_encoder = nn.Identity()
-            priv_encoder_output_dim = num_priv_latent
+            self.env_encoder = nn.Identity()
+            env_encoder_output_dim = num_priv_latent + num_scan 
 
-        # 构建地形特征编码器
-        if len(scan_encoder_dims)>0:
-            scan_encoder = []
-            scan_encoder.append(nn.Linear(num_scan, scan_encoder_dims[0]))
-            scan_encoder.append(activation)
-            for l in range(len(scan_encoder_dims) - 1):
-                scan_encoder.append(nn.Linear(scan_encoder_dims[l], scan_encoder_dims[l + 1]))
-                scan_encoder.append(activation)
-            self.scan_encoder = nn.Sequential(*scan_encoder)
-            scan_encoder_output_dim = scan_encoder_dims[-1]
-        else:
-            self.scan_encoder = nn.Identity()
-            scan_encoder_output_dim = num_scan
-            
         ########################### Adaptation Module ###########################
-        self.history_encoder = StateHistoryMLP(activation, num_prop, num_hist, priv_encoder_output_dim + scan_encoder_output_dim)
+        self.history_encoder = StateHistoryMLP(activation, num_prop, num_hist, env_encoder_output_dim)
 
         ########################### Base_policy ############################
         actor_layers = []
         actor_layers.append(nn.Linear(num_prop+
-                                      priv_encoder_output_dim+
-                                      scan_encoder_output_dim, 
-                                      actor_hidden_dims[0]))  # 普通观测 + 优先观测编码向量 + 扫描点编码向量
+                                      env_encoder_output_dim,
+                                      actor_hidden_dims[0]))
         actor_layers.append(activation)
         for l in range(len(actor_hidden_dims)):
             if l == len(actor_hidden_dims) - 1:
@@ -149,26 +133,20 @@ class Actor(nn.Module):
             backbone_input = torch.cat([obs_prop, latent], dim=1)
         # phase 1
         else: 
-            scan_latent = self.infer_scan_latent(obs)
-            priv_latent = self.infer_priv_latent(obs)
-            backbone_input = torch.cat([obs_prop, priv_latent, scan_latent], dim=1) 
+            env_latent = self.infer_env_latent(obs)
+            backbone_input = torch.cat([obs_prop, env_latent], dim=1) 
             
         backbone_output = self.actor_backbone(backbone_input)        
         return backbone_output
         
     
-    def infer_priv_latent(self, obs):
-        priv = obs[:, self.num_prop : self.num_prop + self.num_priv_latent]
-        return self.priv_encoder(priv)
+    def infer_env_latent(self, obs):
+        priv = obs[:, self.num_prop : self.num_prop + self.num_priv_latent+self.num_scan]
+        return self.env_encoder(priv)
     
-    def infer_scan_latent(self,obs):
-        scan = obs[:, self.num_prop + self.num_priv_latent : self.num_prop + self.num_priv_latent + self.num_scan]
-        return self.scan_encoder(scan)
-
     def infer_hist_latent(self, obs):
         hist = obs[:, -self.num_hist*self.num_prop:]
         return self.history_encoder(hist)
-    
 
 # 定义ActorCritic网络结构
 class MYActorCritic(nn.Module):
@@ -180,7 +158,6 @@ class MYActorCritic(nn.Module):
                         num_priv_latent, 
                         num_hist,
                         num_actions,
-                        scan_encoder_dims= [256, 256, 256],
                         actor_hidden_dims=[256, 256, 256],
                         critic_hidden_dims=[256, 256, 256],
                         activation='elu',
@@ -193,10 +170,10 @@ class MYActorCritic(nn.Module):
         # 激活函数获取
         activation = get_activation(activation)
 
-        priv_encoder_dims= kwargs['priv_encoder_dims']
+        env_encoder_dims= kwargs['env_encoder_dims']
 
         # actor网络的构建
-        self.actor = Actor(num_prop, num_scan, num_actions, actor_hidden_dims, priv_encoder_dims,scan_encoder_dims, num_priv_latent, num_hist, activation, tanh_encoder_output=kwargs['tanh_encoder_output'])
+        self.actor = Actor(num_prop, num_scan, num_actions, actor_hidden_dims, env_encoder_dims, num_priv_latent, num_hist, activation, tanh_encoder_output=kwargs['tanh_encoder_output'])
 
         # Value function
         # 定义critic网络结构

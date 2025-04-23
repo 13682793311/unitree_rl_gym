@@ -104,7 +104,6 @@ class MYOnPolicyRunner:
         # 损失值        
         mean_value_loss = 0.
         mean_surrogate_loss = 0.
-        mean_estimator_loss = 0.
         mean_hist_latent_loss = 0.
 
         # initialize writer
@@ -170,7 +169,7 @@ class MYOnPolicyRunner:
                 self.alg.compute_returns(critic_obs)
             
             # 反向传播更新策略(加入了对估计器的更新)
-            mean_value_loss, mean_surrogate_loss, mean_priv_reg_loss = self.alg.update()
+            mean_value_loss, mean_surrogate_loss, mean_env_reg_loss = self.alg.update()
             
             # 历史编码器的反向传播
             if hist_encoding:
@@ -214,7 +213,7 @@ class MYOnPolicyRunner:
 
         self.writer.add_scalar('Loss/value_function', locs['mean_value_loss'], locs['it'])
         self.writer.add_scalar('Loss/surrogate', locs['mean_surrogate_loss'], locs['it'])
-        self.writer.add_scalar('Loss/priv_reg', locs['mean_priv_reg_loss'], locs['it'])
+        self.writer.add_scalar('Loss/env_reg', locs['mean_env_reg_loss'], locs['it'])
         self.writer.add_scalar('Loss/hist_latent', locs['mean_hist_latent_loss'], locs['it'])
         self.writer.add_scalar('Loss/learning_rate', self.alg.learning_rate, locs['it'])
         self.writer.add_scalar('Policy/mean_noise_std', mean_std.item(), locs['it'])
@@ -236,7 +235,7 @@ class MYOnPolicyRunner:
                             'collection_time']:.3f}s, learning {locs['learn_time']:.3f}s)\n"""
                           f"""{'Value function loss:':>{pad}} {locs['mean_value_loss']:.4f}\n"""
                           f"""{'Surrogate loss:':>{pad}} {locs['mean_surrogate_loss']:.4f}\n"""
-                          f"""{'Privileged reg loss:':>{pad}} {locs['mean_priv_reg_loss']:.4f}\n"""
+                          f"""{'Env reg loss:':>{pad}} {locs['mean_env_reg_loss']:.4f}\n"""
                           f"""{'Hist latent loss:':>{pad}} {locs['mean_hist_latent_loss']:.4f}\n"""
                           f"""{'Mean action noise std:':>{pad}} {mean_std.item():.2f}\n"""
                           f"""{'Mean reward:':>{pad}} {statistics.mean(locs['rewbuffer']):.2f}\n"""
